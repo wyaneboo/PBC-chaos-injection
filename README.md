@@ -15,9 +15,8 @@ The simulator is designed to create realistic messy Excel workbooks for testing:
 
 ## Current Status
 
-This repository currently contains the architecture and extension contracts only.
-Workbook generation, chaos mutation logic, rendering, metadata writing, and validation
-are intentionally stubbed for later implementation.
+This repository now includes the single-workbook generator, ground-truth sidecar
+export, chaos severity configuration, and a Phase 9 batch simulation CLI.
 
 ## Architecture
 
@@ -59,18 +58,73 @@ src/pbc_chaos/
 tests/                    architecture contract tests
 ```
 
-## CLI Shape
+## CLI Usage
 
-Planned commands:
+Install the package in editable mode if the `pbc-chaos` command is not already
+available:
+
+```powershell
+pip install -e .
+```
+
+Generate one workbook:
+
+```powershell
+pbc-chaos generate-one --company "ABC Sdn Bhd" --period "FY2025" --chaos-level 4 --seed 42
+```
+
+Generate a batch of simulated companies at one chaos level:
+
+```powershell
+pbc-chaos generate-batch --companies 50 --period "FY2025" --chaos-level 3 --output ./data/generated
+```
+
+Generate a mixed-chaos dataset. The dataset command defaults to `FY2025` unless
+`--period` is provided:
+
+```powershell
+pbc-chaos generate-dataset --companies 100 --min-chaos 0 --max-chaos 5 --output ./data/dataset
+```
+
+Validate generated workbooks and ground-truth JSON sidecars:
+
+```powershell
+pbc-chaos validate --input ./data/generated
+```
+
+Export or rebuild a manifest CSV from an existing generated directory:
+
+```powershell
+pbc-chaos manifest --input ./data/generated --output manifest.csv
+```
+
+Legacy config-based generation is still available:
 
 ```powershell
 pbc-chaos generate --config configs/default.yaml
-pbc-chaos validate outputs/run_001
 pbc-chaos list-doc-types
 ```
 
-Only `list-doc-types` is meaningful before implementation. `generate` and `validate`
-are wired but intentionally raise `NotImplementedError`.
+Generation commands write `.xlsx` files, `.groundtruth.json` sidecars, and a
+`manifest.csv` in the output directory. CLI validation exits with status code `1`
+and prints actionable errors when input directories are missing, sidecars are
+missing or invalid, workbooks cannot be opened, or workbook sheet names no longer
+match ground truth.
+
+### Manifest Columns
+
+Dataset manifests use this schema:
+
+- `workbook_id`
+- `company_name`
+- `period`
+- `chaos_level`
+- `file_path`
+- `groundtruth_path`
+- `document_types`
+- `row_count`
+- `discrepancy_count`
+- `generated_at`
 
 ## Required Document Types
 
