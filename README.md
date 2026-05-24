@@ -117,3 +117,17 @@ The normalized target schema design is documented in
 The chaos injection framework is documented in `docs/chaos-framework.md`.
 Current default chaos injectors are no-op placeholders that provide execution
 slots for later mutation logic.
+
+## Phase 7 Severity Config
+
+Workbook messiness can be controlled with YAML presets in `config/`:
+
+```python
+from config_loader import load_config
+from pbc_chaos import generate_pbc_workbook
+
+config = load_config("config/nightmare.yaml")
+workbook = generate_pbc_workbook(company, period, config=config, seed=42)
+```
+
+See `docs/chaos-severity-config.md` for every severity level and probability option.

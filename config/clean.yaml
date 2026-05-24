@@ -1,0 +1,6 @@
+# Severity 0: clean export. No layout, data, formula, or workbook artifacts are
+# intentionally added. Missing probabilities inherit the all-zero severity 0
+# defaults from the config loader.
+
+severity: 0
+

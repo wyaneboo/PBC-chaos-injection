@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import copy
 from dataclasses import dataclass
+from datetime import date, datetime, timedelta
 from random import Random
 from typing import Any
 
@@ -78,6 +79,7 @@ def add_title_block(
     prepared_by: str,
     financial_year: int | None,
     rng: Random,
+    merge_cells: bool = True,
 ) -> TableBounds:
     """Add a finance-team style title and metadata block above the table."""
 
@@ -91,12 +93,13 @@ def add_title_block(
     min_col = table.min_col
     max_col = table.max_col
 
-    worksheet.merge_cells(
-        start_row=title_row,
-        start_column=min_col,
-        end_row=title_row,
-        end_column=max_col,
-    )
+    if merge_cells:
+        worksheet.merge_cells(
+            start_row=title_row,
+            start_column=min_col,
+            end_row=title_row,
+            end_column=max_col,
+        )
     title_cell = worksheet.cell(title_row, min_col, title)
     title_cell.font = Font(bold=True, size=14, color="1F2937")
     title_cell.fill = PatternFill("solid", fgColor=rng.choice(["D9EAF7", "E2F0D9", "FFF2CC"]))
@@ -199,7 +202,13 @@ def add_subtotal_rows(
     return TableBounds(table.min_row, table.min_col, max_row, table.max_col)
 
 
-def add_footer_notes(worksheet: Worksheet, table: TableBounds, *, rng: Random) -> TableBounds:
+def add_footer_notes(
+    worksheet: Worksheet,
+    table: TableBounds,
+    *,
+    rng: Random,
+    merge_cells: bool = True,
+) -> TableBounds:
     """Add footer notes below the table, with occasional in-table reminder text."""
 
     note_row = table.max_row + 2
@@ -208,12 +217,13 @@ def add_footer_notes(worksheet: Worksheet, table: TableBounds, *, rng: Random) -
         "Prepared from ERP export; manual reclasses highlighted by finance.",
         "Older review notes intentionally retained for audit trail.",
     ]))
-    worksheet.merge_cells(
-        start_row=note_row,
-        start_column=table.min_col,
-        end_row=note_row,
-        end_column=table.max_col,
-    )
+    if merge_cells:
+        worksheet.merge_cells(
+            start_row=note_row,
+            start_column=table.min_col,
+            end_row=note_row,
+            end_column=table.max_col,
+        )
     worksheet.cell(note_row, table.min_col).font = Font(italic=True, color="666666")
 
     if table.max_row - table.min_row > 5:
@@ -287,6 +297,152 @@ def add_hidden_reconciliation_tab(workbook: Workbook, *, source: Worksheet) -> W
     return sheet
 
 
+def rename_random_columns(
+    worksheet: Worksheet,
+    table: TableBounds,
+    *,
+    count: int,
+    rng: Random,
+) -> None:
+    """Rename selected headers using common finance shorthand."""
+
+    aliases = {
+        "account_code": ("GL", "Acct No", "A/C"),
+        "account_name": ("Account", "Description"),
+        "closing_balance": ("Closing Bal", "Amount", "FY Bal"),
+        "outstanding_amount": ("Outstanding", "Open Amt"),
+        "posting_date": ("Post Dt", "GL Date"),
+        "invoice_date": ("Inv Date", "Doc Date"),
+        "vendor_name": ("Supplier", "Vendor"),
+        "customer_name": ("Customer", "Debtor"),
+        "debit": ("Dr", "Debit Amt"),
+        "credit": ("Cr", "Credit Amt"),
+        "amount_signed": ("Signed Amt", "Net Amt"),
+        "gross_pay": ("Gross", "Gross Payroll"),
+        "net_pay": ("Net", "Net Payroll"),
+        "total_cost": ("Value", "Ext Cost"),
+    }
+    candidates = []
+    for col in range(table.min_col, table.max_col + 1):
+        value = worksheet.cell(table.header_row, col).value
+        if value is not None:
+            candidates.append((col, str(value)))
+    rng.shuffle(candidates)
+    for col, header in candidates[: max(0, count)]:
+        key = header.strip().lower().replace(" ", "_")
+        choices = aliases.get(key)
+        worksheet.cell(table.header_row, col).value = rng.choice(choices) if choices else _humanize_header(header)
+
+
+def stringify_numeric_cells(
+    worksheet: Worksheet,
+    table: TableBounds,
+    *,
+    count: int,
+    rng: Random,
+) -> None:
+    """Convert selected numeric cells to text while preserving the visible value."""
+
+    candidates = [
+        cell
+        for row in worksheet.iter_rows(
+            min_row=table.min_row + 1,
+            max_row=table.max_row,
+            min_col=table.min_col,
+            max_col=table.max_col,
+        )
+        for cell in row
+        if isinstance(cell.value, int | float) and not isinstance(cell.value, bool)
+    ]
+    rng.shuffle(candidates)
+    for cell in candidates[: max(0, count)]:
+        cell.value = f"{float(cell.value):,.2f}"
+
+
+def inject_formula_errors(
+    worksheet: Worksheet,
+    table: TableBounds,
+    *,
+    count: int,
+    rng: Random,
+) -> None:
+    """Replace a few numeric cells with broken formulas."""
+
+    candidates = [
+        cell
+        for row in worksheet.iter_rows(
+            min_row=table.min_row + 1,
+            max_row=table.max_row,
+            min_col=table.min_col,
+            max_col=table.max_col,
+        )
+        for cell in row
+        if isinstance(cell.value, int | float) and not isinstance(cell.value, bool)
+    ]
+    rng.shuffle(candidates)
+    errors = ("=#REF!", "=SUM(#REF!)", "=1/0")
+    for cell in candidates[: max(0, count)]:
+        cell.value = rng.choice(errors)
+
+
+def insert_wrong_period_rows(
+    worksheet: Worksheet,
+    table: TableBounds,
+    *,
+    count: int,
+    rng: Random,
+) -> TableBounds:
+    """Copy rows and move date/year values outside the reporting period."""
+
+    date_columns = _date_like_columns(worksheet, table)
+    if not date_columns or table.max_row <= table.min_row:
+        return table
+
+    max_row = table.max_row
+    for _ in range(max(0, count)):
+        source_row = rng.randint(table.min_row + 1, max_row)
+        target_row = source_row + 1
+        worksheet.insert_rows(target_row, 1)
+        for col in range(table.min_col, table.max_col + 1):
+            _copy_cell(worksheet.cell(source_row, col), worksheet.cell(target_row, col))
+        for col in date_columns:
+            cell = worksheet.cell(target_row, col)
+            cell.value = _wrong_period_value(cell.value)
+            cell.fill = PatternFill("solid", fgColor="F8CBAD")
+        worksheet.cell(target_row, table.min_col).font = Font(italic=True, color="C00000")
+        max_row += 1
+    return TableBounds(table.min_row, table.min_col, max_row, table.max_col)
+
+
+def add_secondary_tables(
+    worksheet: Worksheet,
+    table: TableBounds,
+    *,
+    count: int,
+    rng: Random,
+) -> None:
+    """Add small side tables below the main table."""
+
+    for index in range(max(0, count)):
+        start_row = table.max_row + 4 + index * 6
+        start_col = table.min_col + rng.randint(0, min(2, max(0, table.width - 3)))
+        worksheet.cell(start_row, start_col, rng.choice(["Manual recon", "Finance notes", "Late adjustments"]))
+        worksheet.cell(start_row, start_col).font = Font(bold=True)
+        headers = ("Ref", "Description", "Amount")
+        for offset, header in enumerate(headers):
+            cell = worksheet.cell(start_row + 1, start_col + offset, header)
+            cell.font = Font(bold=True, color="FFFFFF")
+            cell.fill = PatternFill("solid", fgColor="7F7F7F")
+        for row_offset in range(2, 5):
+            worksheet.cell(start_row + row_offset, start_col, f"M-{index + 1}-{row_offset - 1}")
+            worksheet.cell(
+                start_row + row_offset,
+                start_col + 1,
+                rng.choice(["Accrual true-up", "Timing item", "Client estimate"]),
+            )
+            worksheet.cell(start_row + row_offset, start_col + 2, round(rng.uniform(-5000, 5000), 2))
+
+
 def _numeric_columns(worksheet: Worksheet, table: TableBounds) -> list[int]:
     columns: list[int] = []
     for col in range(table.min_col, table.max_col + 1):
@@ -297,6 +453,42 @@ def _numeric_columns(worksheet: Worksheet, table: TableBounds) -> list[int]:
         if numeric_cells >= 2:
             columns.append(col)
     return columns
+
+
+def _date_like_columns(worksheet: Worksheet, table: TableBounds) -> list[int]:
+    columns: list[int] = []
+    for col in range(table.min_col, table.max_col + 1):
+        header = str(worksheet.cell(table.header_row, col).value or "").lower()
+        if any(token in header for token in ("date", "period", "year", "fy")):
+            columns.append(col)
+            continue
+        for row in range(table.min_row + 1, min(table.max_row, table.min_row + 10) + 1):
+            value = worksheet.cell(row, col).value
+            if isinstance(value, date | datetime):
+                columns.append(col)
+                break
+    return columns
+
+
+def _wrong_period_value(value: Any) -> Any:
+    if isinstance(value, datetime):
+        return value + timedelta(days=370)
+    if isinstance(value, date):
+        return value + timedelta(days=370)
+    if isinstance(value, int) and 1900 <= value <= 2200:
+        return value + 1
+    if isinstance(value, str):
+        stripped = value.strip()
+        if len(stripped) >= 4 and stripped[:4].isdigit():
+            return f"{int(stripped[:4]) + 1}{stripped[4:]}"
+    return value
+
+
+def _humanize_header(header: str) -> str:
+    words = header.replace("_", " ").split()
+    if not words:
+        return header
+    return " ".join(word[:4].title() if len(word) > 4 else word.title() for word in words)
 
 
 def _copy_cell(source: Cell, target: Cell) -> None:

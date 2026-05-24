@@ -1,0 +1,20 @@
+# Severity 5: nightmare PBC file. All probabilities are set to 1.0 so every
+# worksheet receives the full set of supported chaos categories.
+
+severity: 5
+
+probabilities:
+  merged_cells: 1.0
+  hidden_rows: 1.0
+  hidden_columns: 1.0
+  duplicated_headers: 1.0
+  inserted_notes: 1.0
+  subtotal_rows: 1.0
+  wrong_period_rows: 1.0
+  renamed_columns: 1.0
+  stringified_numbers: 1.0
+  formula_errors: 1.0
+  multiple_tables_in_one_sheet: 1.0
+  old_version_tabs: 1.0
+  hidden_reconciliation_tabs: 1.0
+
