@@ -131,3 +131,23 @@ workbook = generate_pbc_workbook(company, period, config=config, seed=42)
 ```
 
 See `docs/chaos-severity-config.md` for every severity level and probability option.
+
+## Ground Truth Metadata
+
+Use the metadata exporter when you want a workbook and matching machine-readable
+ground truth sidecar:
+
+```python
+from pbc_chaos.metadata import export_pbc_workbook
+
+exported = export_pbc_workbook(
+    company,
+    period,
+    output_dir="outputs",
+    config="config/nightmare.yaml",
+    seed=42,
+)
+```
+
+This writes files such as `ABC_Sdn_Bhd_PBC_2025_nightmare.xlsx` and
+`ABC_Sdn_Bhd_PBC_2025_nightmare.groundtruth.json`.

@@ -1,4 +1,4 @@
-"""YAML loader for Phase 7 configurable chaos severity."""
+"""YAML loader for configurable chaos severity."""
 
 from __future__ import annotations
 

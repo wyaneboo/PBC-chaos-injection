@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
 
@@ -11,6 +12,8 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 from pbc_chaos.config_loader import ChaosWorkbookConfig, config_from_mapping, load_config
 from pbc_chaos.generators.base import CompanyProfile, FinancialPeriod, GeneratedDocument
 from pbc_chaos.generators.expense_claims import ExpenseClaimListingGenerator
+from pbc_chaos.metadata.logger import GroundTruthLogger
+from pbc_chaos.metadata.schema import WorkbookGroundTruth
 from pbc_chaos.reconciliation import (
     ReconciliationContext,
     generate_ap_aging,
@@ -42,6 +45,12 @@ SHEET_NAMES = {
 }
 
 
+@dataclass(frozen=True)
+class GeneratedPBCWorkbook:
+    workbook: Workbook
+    ground_truth: WorkbookGroundTruth
+
+
 def generate_pbc_workbook(
     company: CompanyProfile,
     period: FinancialPeriod,
@@ -51,8 +60,26 @@ def generate_pbc_workbook(
 ) -> Workbook:
     """Generate one workbook using the configured Phase 7 chaos severity."""
 
+    return generate_pbc_workbook_with_ground_truth(
+        company,
+        period,
+        config=config,
+        seed=seed,
+    ).workbook
+
+
+def generate_pbc_workbook_with_ground_truth(
+    company: CompanyProfile,
+    period: FinancialPeriod,
+    *,
+    config: ChaosWorkbookConfig | Mapping[str, object] | str | Path | None = None,
+    seed: int | None = None,
+) -> GeneratedPBCWorkbook:
+    """Generate a workbook and matching machine-readable ground truth."""
+
     resolved = _coerce_config(config)
-    documents = _generate_documents(company, period, seed=seed)
+    context, documents = _generate_documents(company, period, seed=seed)
+    logger = GroundTruthLogger(company=company, period=period, config=resolved, seed=seed)
 
     workbook = Workbook()
     workbook.remove(workbook.active)
@@ -61,6 +88,7 @@ def generate_pbc_workbook(
         worksheet = workbook.create_sheet(sheet_name)
         for row in dataframe_to_rows(document.data, index=False, header=True):
             worksheet.append(row)
+        logger.start_sheet(document, worksheet)
 
         layout_config = resolved.layout_config(
             company=company,
@@ -75,13 +103,18 @@ def generate_pbc_workbook(
             worksheet=worksheet,
             config=layout_config,
             seed=(0 if seed is None else seed) + index,
+            metadata_logger=logger,
         )
 
     workbook.properties.title = f"{company.company_name} PBC workbook"
     workbook.properties.subject = (
         f"Chaos severity {resolved.severity}: {resolved.severity_description}"
     )
-    return workbook
+    logger.record_discrepancies(context.discrepancy_metadata)
+    return GeneratedPBCWorkbook(
+        workbook=workbook,
+        ground_truth=logger.build_ground_truth(workbook),
+    )
 
 
 def _coerce_config(
@@ -101,7 +134,7 @@ def _generate_documents(
     period: FinancialPeriod,
     *,
     seed: int | None,
-) -> tuple[GeneratedDocument, ...]:
+) -> tuple[ReconciliationContext, tuple[GeneratedDocument, ...]]:
     context = ReconciliationContext(company, period, seed=seed)
     documents = [
         generate_trial_balance(context),
@@ -122,5 +155,4 @@ def _generate_documents(
             seed=(0 if seed is None else seed) + 50_000,
         )
     )
-    return tuple(documents)
-
+    return context, tuple(documents)

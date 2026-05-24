@@ -267,14 +267,17 @@ def add_old_version_tabs(
     source: Worksheet,
     count: int,
     rng: Random,
-) -> None:
+) -> list[str]:
     """Copy the active worksheet into visible old-version tabs."""
 
+    sheet_names: list[str] = []
     for idx in range(1, max(0, count) + 1):
         copied = workbook.copy_worksheet(source)
         copied.title = _safe_sheet_title(workbook, f"{source.title}_old_v{idx}")
         copied.sheet_properties.tabColor = rng.choice(["C9C9C9", "F4B183", "BDD7EE"])
         copied["A1"] = "OLD VERSION - retained for support trail"
+        sheet_names.append(copied.title)
+    return sheet_names
 
 
 def add_hidden_reconciliation_tab(workbook: Workbook, *, source: Worksheet) -> Worksheet:
@@ -303,7 +306,7 @@ def rename_random_columns(
     *,
     count: int,
     rng: Random,
-) -> None:
+) -> dict[str, str]:
     """Rename selected headers using common finance shorthand."""
 
     aliases = {
@@ -328,10 +331,14 @@ def rename_random_columns(
         if value is not None:
             candidates.append((col, str(value)))
     rng.shuffle(candidates)
+    mapping: dict[str, str] = {}
     for col, header in candidates[: max(0, count)]:
         key = header.strip().lower().replace(" ", "_")
         choices = aliases.get(key)
-        worksheet.cell(table.header_row, col).value = rng.choice(choices) if choices else _humanize_header(header)
+        renamed = rng.choice(choices) if choices else _humanize_header(header)
+        worksheet.cell(table.header_row, col).value = renamed
+        mapping[header] = renamed
+    return mapping
 
 
 def stringify_numeric_cells(
@@ -340,7 +347,7 @@ def stringify_numeric_cells(
     *,
     count: int,
     rng: Random,
-) -> None:
+) -> list[dict[str, Any]]:
     """Convert selected numeric cells to text while preserving the visible value."""
 
     candidates = [
@@ -355,8 +362,18 @@ def stringify_numeric_cells(
         if isinstance(cell.value, int | float) and not isinstance(cell.value, bool)
     ]
     rng.shuffle(candidates)
+    changed: list[dict[str, Any]] = []
     for cell in candidates[: max(0, count)]:
+        original = cell.value
         cell.value = f"{float(cell.value):,.2f}"
+        changed.append(
+            {
+                "cell": cell.coordinate,
+                "original_value": original,
+                "new_value": cell.value,
+            }
+        )
+    return changed
 
 
 def inject_formula_errors(
@@ -365,7 +382,7 @@ def inject_formula_errors(
     *,
     count: int,
     rng: Random,
-) -> None:
+) -> list[dict[str, Any]]:
     """Replace a few numeric cells with broken formulas."""
 
     candidates = [
@@ -381,8 +398,18 @@ def inject_formula_errors(
     ]
     rng.shuffle(candidates)
     errors = ("=#REF!", "=SUM(#REF!)", "=1/0")
+    changed: list[dict[str, Any]] = []
     for cell in candidates[: max(0, count)]:
+        original = cell.value
         cell.value = rng.choice(errors)
+        changed.append(
+            {
+                "cell": cell.coordinate,
+                "original_value": original,
+                "new_value": cell.value,
+            }
+        )
+    return changed
 
 
 def insert_wrong_period_rows(
@@ -391,27 +418,44 @@ def insert_wrong_period_rows(
     *,
     count: int,
     rng: Random,
-) -> TableBounds:
+) -> tuple[TableBounds, list[dict[str, Any]]]:
     """Copy rows and move date/year values outside the reporting period."""
 
     date_columns = _date_like_columns(worksheet, table)
     if not date_columns or table.max_row <= table.min_row:
-        return table
+        return table, []
 
     max_row = table.max_row
+    inserted: list[dict[str, Any]] = []
     for _ in range(max(0, count)):
         source_row = rng.randint(table.min_row + 1, max_row)
         target_row = source_row + 1
         worksheet.insert_rows(target_row, 1)
         for col in range(table.min_col, table.max_col + 1):
             _copy_cell(worksheet.cell(source_row, col), worksheet.cell(target_row, col))
+        changed_cells = []
         for col in date_columns:
             cell = worksheet.cell(target_row, col)
+            original = cell.value
             cell.value = _wrong_period_value(cell.value)
             cell.fill = PatternFill("solid", fgColor="F8CBAD")
+            changed_cells.append(
+                {
+                    "cell": cell.coordinate,
+                    "original_value": original,
+                    "new_value": cell.value,
+                }
+            )
         worksheet.cell(target_row, table.min_col).font = Font(italic=True, color="C00000")
+        inserted.append(
+            {
+                "source_row": source_row,
+                "inserted_row": target_row,
+                "changed_cells": changed_cells,
+            }
+        )
         max_row += 1
-    return TableBounds(table.min_row, table.min_col, max_row, table.max_col)
+    return TableBounds(table.min_row, table.min_col, max_row, table.max_col), inserted
 
 
 def add_secondary_tables(
@@ -420,9 +464,10 @@ def add_secondary_tables(
     *,
     count: int,
     rng: Random,
-) -> None:
+) -> list[dict[str, Any]]:
     """Add small side tables below the main table."""
 
+    tables: list[dict[str, Any]] = []
     for index in range(max(0, count)):
         start_row = table.max_row + 4 + index * 6
         start_col = table.min_col + rng.randint(0, min(2, max(0, table.width - 3)))
@@ -441,6 +486,14 @@ def add_secondary_tables(
                 rng.choice(["Accrual true-up", "Timing item", "Client estimate"]),
             )
             worksheet.cell(start_row + row_offset, start_col + 2, round(rng.uniform(-5000, 5000), 2))
+        tables.append(
+            {
+                "name": worksheet.cell(start_row, start_col).value,
+                "start_cell": worksheet.cell(start_row, start_col).coordinate,
+                "end_cell": worksheet.cell(start_row + 4, start_col + 2).coordinate,
+            }
+        )
+    return tables
 
 
 def _numeric_columns(worksheet: Worksheet, table: TableBounds) -> list[int]:
