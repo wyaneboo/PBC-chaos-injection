@@ -1,0 +1,77 @@
+run:
+  seed: 20260524
+  output_dir: outputs
+  run_name: null
+
+batch:
+  client_count: 5
+  financial_years: [2024, 2025]
+  locale: en_MY
+  currency: MYR
+
+documents:
+  include:
+    - trial_balance
+    - general_ledger
+    - ap_aging
+    - ar_aging
+    - bank_reconciliation
+    - payroll_summary
+    - payroll_detail
+    - fixed_asset_register
+    - inventory_listing
+    - tax_computation
+    - sst_gst_report
+    - commission_statement
+    - insurance_production_report
+    - customer_confirmation_list
+    - supplier_confirmation_list
+    - cash_flow_summary
+    - journal_entry_listing
+    - expense_claim_listing
+  duplicate_versions: true
+
+chaos:
+  severity: medium
+  injectors:
+    structural: true
+    semantic: true
+    formatting: true
+    human_residue: true
+    data_quality: true
+    formula: true
+    versioning: true
+    file_naming: true
+  probabilities:
+    merged_cells: 0.25
+    hidden_rows: 0.15
+    hidden_columns: 0.10
+    duplicated_rows: 0.08
+    missing_values: 0.05
+    comments: 0.20
+    formula_errors: 0.05
+
+relationships:
+  discrepancy_mode: controlled
+  max_trial_balance_gl_difference_pct: 0.02
+  max_bank_recon_difference_amount: 500.00
+  max_payroll_summary_difference_pct: 0.015
+  max_inventory_summary_difference_pct: 0.03
+
+erp_profiles:
+  allowed:
+    - manual_excel
+    - generic_erp_export
+    - shared_services_extract
+    - insurance_ops_report
+
+metadata:
+  write_manifest: true
+  write_per_file_sidecars: true
+  format: json
+
+validation:
+  open_workbooks: true
+  check_metadata_consistency: true
+  check_controlled_relationships: true
+

@@ -1,0 +1,11 @@
+chaos:
+  severity: high
+  probabilities:
+    merged_cells: 0.45
+    hidden_rows: 0.30
+    hidden_columns: 0.22
+    duplicated_rows: 0.18
+    missing_values: 0.12
+    comments: 0.42
+    formula_errors: 0.12
+
