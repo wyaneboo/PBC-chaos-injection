@@ -28,6 +28,7 @@ metadata-tracked chaos.
 - `core`: shared enums, run contexts, and stable project types.
 - `reference_data`: reusable fake names, chart-of-accounts templates, ERP presets, and terms.
 - `financial_model`: canonical accounting data generation.
+- `schemas`: normalized target schemas for every supported financial document type.
 - `generators`: pluggable document generators that produce workbook plans.
 - `workbook`: intermediate workbook representation and `.xlsx` rendering.
 - `chaos`: reusable chaos injectors and chaos event logging.
@@ -40,9 +41,10 @@ metadata-tracked chaos.
 New document type:
 
 1. Add a `DocumentType` enum value.
-2. Create a generator implementing `DocumentGenerator`.
-3. Register it in the generator registry.
-4. Add validation rules if the document participates in reconciliation.
+2. Add a normalized `DocumentSchema`.
+3. Create a generator implementing `DocumentGenerator`.
+4. Register it in the schema and generator registries.
+5. Add validation rules if the document participates in reconciliation.
 
 New chaos pattern:
 
@@ -56,4 +58,3 @@ New ERP style:
 1. Add a reference profile under `reference_data`.
 2. Map document generator defaults to the profile.
 3. Add semantic and formatting terms that match the profile.
-

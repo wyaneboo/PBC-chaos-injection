@@ -50,6 +50,7 @@ src/pbc_chaos/
   config/                 typed settings
   core/                   shared enums and contexts
   financial_model/        clean accounting truth layer
+  schemas/                normalized target schemas for supported documents
   generators/             document generator registry and placeholders
   metadata/               run manifest and sidecar metadata contracts
   reference_data/         reusable fake terms and future data libraries
@@ -106,3 +107,7 @@ Start with the canonical financial model and one clean document generator:
 
 See `docs/implementation-roadmap.md` for the full sequence.
 
+## Normalized Schemas
+
+The normalized target schema design is documented in
+`docs/normalized-schemas.md` and implemented in `src/pbc_chaos/schemas`.
