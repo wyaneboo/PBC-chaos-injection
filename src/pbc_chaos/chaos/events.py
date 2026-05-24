@@ -14,5 +14,8 @@ class ChaosEvent:
     sheet_name: str | None = None
     cell_range: str | None = None
     severity: str | None = None
+    event_type: str = "mutation"
+    document_type: str | None = None
+    client_id: str | None = None
+    financial_year: int | None = None
     details: dict[str, Any] = field(default_factory=dict)
-

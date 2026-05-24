@@ -49,9 +49,11 @@ New document type:
 New chaos pattern:
 
 1. Implement `ChaosInjector`.
-2. Declare supported severity and document scope.
-3. Emit `ChaosEvent` records for each mutation.
-4. Register it in `ChaosEngine`.
+2. Declare order, probability key, category, and document scope.
+3. Use `ChaosContext` for deterministic randomness.
+4. Return a replacement `WorkbookPlan`.
+5. Emit `ChaosEvent` records for each mutation.
+6. Register it in `ChaosInjectorRegistry`.
 
 New ERP style:
 

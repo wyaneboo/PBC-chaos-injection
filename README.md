@@ -111,3 +111,9 @@ See `docs/implementation-roadmap.md` for the full sequence.
 
 The normalized target schema design is documented in
 `docs/normalized-schemas.md` and implemented in `src/pbc_chaos/schemas`.
+
+## Chaos Framework
+
+The chaos injection framework is documented in `docs/chaos-framework.md`.
+Current default chaos injectors are no-op placeholders that provide execution
+slots for later mutation logic.
