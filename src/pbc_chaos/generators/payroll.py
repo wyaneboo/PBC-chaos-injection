@@ -7,7 +7,14 @@ from random import Random
 import pandas as pd
 
 from pbc_chaos.core.types import DocumentType
-from pbc_chaos.generators._finance_seed import DEPARTMENTS, base_common, month_end, money
+from pbc_chaos.generators._finance_seed import (
+    DEPARTMENTS,
+    EMPLOYEES,
+    base_common,
+    employee_id,
+    month_end,
+    money,
+)
 from pbc_chaos.generators.base import BaseFinancialDocumentGenerator, CompanyProfile, FinancialPeriod
 
 
@@ -61,3 +68,80 @@ class PayrollSummaryGenerator(BaseFinancialDocumentGenerator):
                 )
         return pd.DataFrame(rows)
 
+
+class PayrollDetailGenerator(BaseFinancialDocumentGenerator):
+    """Generate employee-level payroll detail lines."""
+
+    document_type = DocumentType.PAYROLL_DETAIL
+
+    def build_dataframe(
+        self,
+        company: CompanyProfile,
+        period: FinancialPeriod,
+        rng: Random,
+    ) -> pd.DataFrame:
+        rows = []
+        common = base_common(company, period)
+        employee_counter = 1
+        positions = ("Executive", "Analyst", "Supervisor", "Manager", "Clerk")
+        for month in range(1, 13):
+            period_end = month_end(period, month)
+            period_start = period_end.replace(day=1)
+            for department in DEPARTMENTS[:5]:
+                employee_count = rng.randint(4, 12)
+                for _ in range(employee_count):
+                    basic = money(rng, 2_400, 8_500)
+                    overtime = round(basic * rng.uniform(0.00, 0.05), 2)
+                    allowance = round(basic * rng.uniform(0.02, 0.10), 2)
+                    bonus = round(basic * rng.choice([0.0, 0.0, 0.05, 0.10]), 2)
+                    commission = round(basic * rng.choice([0.0, 0.0, 0.03]), 2)
+                    gross = round(basic + overtime + allowance + bonus + commission, 2)
+                    epf_employee = round(gross * 0.11, 2)
+                    socso_employee = round(gross * 0.005, 2)
+                    eis_employee = round(gross * 0.002, 2)
+                    pcb_tax = round(gross * rng.uniform(0.02, 0.06), 2)
+                    other_deductions = round(gross * rng.choice([0.0, 0.0, 0.005]), 2)
+                    net_pay = round(
+                        gross
+                        - epf_employee
+                        - socso_employee
+                        - eis_employee
+                        - pcb_tax
+                        - other_deductions,
+                        2,
+                    )
+                    rows.append(
+                        {
+                            **common,
+                            "pay_run_id": f"PAY{period.financial_year}{month:02d}",
+                            "employee_id": employee_id((employee_counter - 1) % len(EMPLOYEES)),
+                            "employee_name": EMPLOYEES[(employee_counter - 1) % len(EMPLOYEES)],
+                            "department": department,
+                            "position": rng.choice(positions),
+                            "pay_period_start": period_start,
+                            "pay_period_end": period_end,
+                            "payment_date": period_end,
+                            "basic_salary": basic,
+                            "overtime_amount": overtime,
+                            "allowance_amount": allowance,
+                            "bonus_amount": bonus,
+                            "commission_amount": commission,
+                            "gross_pay": gross,
+                            "epf_employee": epf_employee,
+                            "socso_employee": socso_employee,
+                            "eis_employee": eis_employee,
+                            "pcb_tax": pcb_tax,
+                            "other_deductions": other_deductions,
+                            "net_pay": net_pay,
+                            "epf_employer": round(gross * 0.13, 2),
+                            "socso_employer": round(gross * 0.018, 2),
+                            "eis_employer": round(gross * 0.002, 2),
+                            "payment_method": "bank_transfer",
+                            "bank_account_masked": f"****-****-{rng.randint(1000, 9999)}",
+                            "join_date": period.start_date,
+                            "termination_date": None,
+                            "remarks": "",
+                        }
+                    )
+                    employee_counter += 1
+        return pd.DataFrame(rows)
