@@ -98,6 +98,12 @@ Export or rebuild a manifest CSV from an existing generated directory:
 pbc-chaos manifest --input ./data/generated --output manifest.csv
 ```
 
+Score an AI/data extraction output against simulator ground truth:
+
+```powershell
+pbc-chaos score --groundtruth ./data/generated/ABC.groundtruth.json --extraction ./outputs/extraction_output.json --output-json score_report.json --output-md score_report.md
+```
+
 Legacy config-based generation is still available:
 
 ```powershell
@@ -110,6 +116,56 @@ Generation commands write `.xlsx` files, `.groundtruth.json` sidecars, and a
 and prints actionable errors when input directories are missing, sidecars are
 missing or invalid, workbooks cannot be opened, or workbook sheet names no longer
 match ground truth.
+
+## Extraction Scoring
+
+The scoring framework compares an extractor's normalized JSON or one-table CSV
+output against a simulator `.groundtruth.json` sidecar. It writes both
+`score_report.json` and a human-readable `score_report.md`.
+
+Supported metrics:
+
+- document classification accuracy
+- table boundary detection accuracy
+- header detection accuracy
+- column mapping accuracy
+- row extraction accuracy
+- numeric value accuracy with configurable tolerance
+- date normalization accuracy
+- discrepancy detection accuracy
+
+Extractor JSON can use `documents`, `sheets`, `tables`, or
+`extracted_documents`. Each document/table can include:
+
+```json
+{
+  "document_type": "trial_balance",
+  "sheet_name": "Trial Balance",
+  "table_location": {
+    "start_row": 3,
+    "start_column": 2,
+    "end_row": 55,
+    "end_column": 18,
+    "header_row": 3
+  },
+  "headers": ["client_id", "financial_year", "account_code", "closing_balance"],
+  "column_mapping": {
+    "Closing Bal": "closing_balance"
+  },
+  "rows": [
+    {
+      "client_id": "client_001",
+      "financial_year": 2025,
+      "account_code": "1000",
+      "closing_balance": 12345.67
+    }
+  ],
+  "detected_discrepancies": []
+}
+```
+
+The comparator includes exact matching, fuzzy column matching, row count
+difference, numeric tolerance checks, and precision/recall/F1 summaries.
 
 ### Manifest Columns
 

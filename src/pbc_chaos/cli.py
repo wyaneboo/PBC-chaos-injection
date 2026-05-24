@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Callable, TypeVar
 
@@ -17,6 +18,7 @@ from pbc_chaos.batch.pipeline import (
     validate_generated_directory,
 )
 from pbc_chaos.config.settings import load_settings
+from pbc_chaos.scoring import ScoringConfig, compare_extraction_files
 
 
 app = typer.Typer(help="Generate messy synthetic audit PBC Excel workbooks.")
@@ -125,6 +127,67 @@ def manifest_command(
     typer.echo(f"Wrote manifest: {manifest_path}")
 
 
+@app.command("score")
+def score_extraction(
+    groundtruth: Path = typer.Option(
+        ...,
+        "--groundtruth",
+        help="Simulator .groundtruth.json file.",
+    ),
+    extraction: Path = typer.Option(
+        ...,
+        "--extraction",
+        help="Extractor output JSON or one-table CSV.",
+    ),
+    output_json: Path = typer.Option(
+        Path("score_report.json"),
+        "--output-json",
+        help="JSON score report path.",
+    ),
+    output_md: Path = typer.Option(
+        Path("score_report.md"),
+        "--output-md",
+        help="Markdown score report path.",
+    ),
+    fuzzy_column_threshold: float = typer.Option(
+        0.82,
+        "--fuzzy-column-threshold",
+        help="Minimum fuzzy similarity for header/column matches.",
+    ),
+    numeric_abs_tolerance: str = typer.Option(
+        "0.01",
+        "--numeric-abs-tolerance",
+        help="Absolute tolerance for numeric value matches.",
+    ),
+    numeric_rel_tolerance: str = typer.Option(
+        "0.0001",
+        "--numeric-rel-tolerance",
+        help="Relative tolerance for numeric value matches.",
+    ),
+) -> None:
+    """Score extraction output against simulator ground truth."""
+
+    abs_tolerance = _decimal_option(numeric_abs_tolerance, "numeric-abs-tolerance")
+    rel_tolerance = _decimal_option(numeric_rel_tolerance, "numeric-rel-tolerance")
+    config = ScoringConfig(
+        fuzzy_column_threshold=fuzzy_column_threshold,
+        numeric_abs_tolerance=abs_tolerance,
+        numeric_rel_tolerance=rel_tolerance,
+    )
+    report = _handle_cli_error(
+        lambda: compare_extraction_files(
+            groundtruth_path=groundtruth,
+            extraction_output_path=extraction,
+            json_report_path=output_json,
+            markdown_report_path=output_md,
+            config=config,
+        )
+    )
+    typer.echo(f"Overall score: {report.overall_score:.3f}")
+    typer.echo(f"Wrote JSON report: {output_json}")
+    typer.echo(f"Wrote Markdown report: {output_md}")
+
+
 @app.command()
 def generate(config: Path = typer.Option(Path("configs/default.yaml"), exists=True)) -> None:
     """Generate a batch run from a legacy YAML config."""
@@ -166,6 +229,14 @@ def _handle_cli_error(callback: Callable[[], T]) -> T:
         raise typer.Exit(1) from exc
     except OSError as exc:
         typer.secho(f"File error: {exc}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
+
+
+def _decimal_option(value: str, name: str) -> Decimal:
+    try:
+        return Decimal(value)
+    except InvalidOperation as exc:
+        typer.secho(f"Error: {name} must be a decimal number.", fg=typer.colors.RED, err=True)
         raise typer.Exit(1) from exc
 
 
