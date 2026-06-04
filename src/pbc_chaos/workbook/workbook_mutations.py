@@ -6,6 +6,7 @@ from copy import copy
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from random import Random
+import re
 from typing import Any
 
 from openpyxl import Workbook
@@ -13,6 +14,8 @@ from openpyxl.cell.cell import Cell
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.worksheet import Worksheet
+
+from pbc_chaos.reference_data.terms import COLUMN_ALIAS_FAMILIES
 
 
 @dataclass(frozen=True)
@@ -306,37 +309,25 @@ def rename_random_columns(
     *,
     count: int,
     rng: Random,
+    sheet_name: str | None = None,
 ) -> dict[str, str]:
     """Rename selected headers using common finance shorthand."""
 
-    aliases = {
-        "account_code": ("GL", "Acct No", "A/C"),
-        "account_name": ("Account", "Description"),
-        "closing_balance": ("Closing Bal", "Amount", "FY Bal"),
-        "outstanding_amount": ("Outstanding", "Open Amt"),
-        "posting_date": ("Post Dt", "GL Date"),
-        "invoice_date": ("Inv Date", "Doc Date"),
-        "vendor_name": ("Supplier", "Vendor"),
-        "customer_name": ("Customer", "Debtor"),
-        "debit": ("Dr", "Debit Amt"),
-        "credit": ("Cr", "Credit Amt"),
-        "amount_signed": ("Signed Amt", "Net Amt"),
-        "gross_pay": ("Gross", "Gross Payroll"),
-        "net_pay": ("Net", "Net Payroll"),
-        "total_cost": ("Value", "Ext Cost"),
-    }
     candidates = []
     for col in range(table.min_col, table.max_col + 1):
         value = worksheet.cell(table.header_row, col).value
         if value is not None:
             candidates.append((col, str(value)))
     rng.shuffle(candidates)
+
+    used_headers = {_normalize_header_key(header) for _, header in candidates}
     mapping: dict[str, str] = {}
     for col, header in candidates[: max(0, count)]:
-        key = header.strip().lower().replace(" ", "_")
-        choices = aliases.get(key)
-        renamed = rng.choice(choices) if choices else _humanize_header(header)
+        choices = _column_alias_choices(header, sheet_name=sheet_name)
+        renamed = _choose_distinct_alias(header, choices, used_headers, rng)
         worksheet.cell(table.header_row, col).value = renamed
+        used_headers.discard(_normalize_header_key(header))
+        used_headers.add(_normalize_header_key(renamed))
         mapping[header] = renamed
     return mapping
 
@@ -535,6 +526,133 @@ def _wrong_period_value(value: Any) -> Any:
         if len(stripped) >= 4 and stripped[:4].isdigit():
             return f"{int(stripped[:4]) + 1}{stripped[4:]}"
     return value
+
+
+def _column_alias_choices(header: str, *, sheet_name: str | None) -> tuple[str, ...]:
+    key = _normalize_header_key(header)
+    choices = (
+        COLUMN_ALIAS_FAMILIES.get(key, ())
+        + _generated_header_aliases(header)
+        + _sheet_context_aliases(key, sheet_name)
+    )
+    return tuple(dict.fromkeys(choices))
+
+
+def _choose_distinct_alias(
+    header: str,
+    choices: tuple[str, ...],
+    used_headers: set[str],
+    rng: Random,
+) -> str:
+    original_key = _normalize_header_key(header)
+    normalized_seen: set[str] = set()
+    distinct_choices: list[str] = []
+    for choice in choices:
+        value = str(choice).strip()
+        if not value:
+            continue
+        choice_key = _normalize_header_key(value)
+        if choice_key == original_key or choice_key in normalized_seen:
+            continue
+        normalized_seen.add(choice_key)
+        distinct_choices.append(value)
+
+    unused_choices = [
+        choice
+        for choice in distinct_choices
+        if _normalize_header_key(choice) not in used_headers
+    ]
+    pool = unused_choices or distinct_choices
+    if pool:
+        return rng.choice(pool)
+    return _humanize_header(header)
+
+
+def _generated_header_aliases(header: str) -> tuple[str, ...]:
+    words = _header_words(header)
+    if not words:
+        return (header,)
+
+    title_words = tuple(word.title() for word in words)
+    abbreviated_words = tuple(_abbreviate_header_word(word) for word in words)
+    return (
+        " ".join(title_words),
+        "".join(title_words),
+        " ".join(abbreviated_words),
+        " ".join(word.upper() for word in abbreviated_words),
+        "-".join(title_words),
+    )
+
+
+def _sheet_context_aliases(key: str, sheet_name: str | None) -> tuple[str, ...]:
+    acronym = _sheet_acronym(sheet_name)
+    if not acronym:
+        return ()
+
+    if key == "account_code":
+        if acronym == "GL":
+            return ("GL Account", "GL Account No", "Ledger Account")
+        return (f"{acronym} Account", f"{acronym} Acct Code")
+    if key == "account_name":
+        return (f"{acronym} Description", f"{acronym} Account Name")
+    if key in {
+        "amount_signed",
+        "closing_balance",
+        "current_amount",
+        "difference_amount",
+        "outstanding_amount",
+        "original_amount",
+    }:
+        return (f"{acronym} Amount", f"{acronym} Bal")
+    return ()
+
+
+def _sheet_acronym(sheet_name: str | None) -> str:
+    if not sheet_name:
+        return ""
+    words = _header_words(sheet_name)
+    if not words:
+        return ""
+    return "".join(word[0].upper() for word in words[:3])
+
+
+def _header_words(value: str) -> tuple[str, ...]:
+    return tuple(match.group(0).lower() for match in re.finditer(r"[A-Za-z0-9]+", value))
+
+
+def _normalize_header_key(value: str) -> str:
+    return "_".join(_header_words(value))
+
+
+def _abbreviate_header_word(word: str) -> str:
+    abbreviations = {
+        "account": "Acct",
+        "amount": "Amt",
+        "balance": "Bal",
+        "category": "Cat",
+        "center": "Ctr",
+        "centre": "Ctr",
+        "closing": "Close",
+        "comparative": "Comp",
+        "credit": "Cr",
+        "customer": "Cust",
+        "debit": "Dr",
+        "department": "Dept",
+        "description": "Desc",
+        "document": "Doc",
+        "financial": "Fin",
+        "invoice": "Inv",
+        "number": "No",
+        "opening": "Open",
+        "outstanding": "OS",
+        "period": "Pd",
+        "posting": "Post",
+        "reference": "Ref",
+        "transaction": "Txn",
+        "vendor": "Vend",
+        "year": "Yr",
+    }
+    return abbreviations.get(word, word.title())
 
 
 def _humanize_header(header: str) -> str:

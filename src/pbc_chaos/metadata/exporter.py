@@ -85,6 +85,9 @@ def _default_filename_stem(ground_truth: WorkbookGroundTruth) -> str:
 
 
 def _severity_label(chaos_level: dict[str, object]) -> str:
+    mode = chaos_level.get("unreproducible_nightmare_mode")
+    if isinstance(mode, dict) and mode.get("enabled"):
+        return "unreproducible_nightmare"
     severity = chaos_level.get("severity")
     if severity == 0:
         return "clean"
@@ -96,4 +99,3 @@ def _severity_label(chaos_level: dict[str, object]) -> str:
 def _slug(value: object) -> str:
     text = re.sub(r"[^A-Za-z0-9]+", "_", str(value)).strip("_")
     return text or "workbook"
-

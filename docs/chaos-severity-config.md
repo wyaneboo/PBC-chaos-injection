@@ -30,13 +30,60 @@ from the selected severity profile.
 - `old_version_tabs`: adds visible old-version copies of selected sheets.
 - `hidden_reconciliation_tabs`: adds hidden client working/reconciliation tabs.
 
+## Unreproducible Nightmare Mode
+
+`unreproducible_nightmare_mode` is an optional post-pass for cases where exact
+seed reproducibility is less important than realistic human mess.
+
+When enabled, the generator first creates the normal configured workbook, then
+runs a non-deterministic LangGraph review agent. If `GEMINI_API_KEY` is set, the
+planning node asks the configured Gemma model through the Gemini API to choose
+the chaos plan using structured JSON output. If credentials or the API call are
+not available, the LangGraph node uses the validated local planner as a
+fallback.
+
+The agent chooses extra chaos tool types such as:
+
+- `human_residue_notation`: adds visible notes or Excel comments in random cells.
+- `formula_errors`: adds a few extra broken formulas.
+- `stringified_numbers`: converts a few more numeric cells into text.
+- `hide_rows_columns`: hides extra rows or columns.
+- `secondary_table`: adds another small working table.
+- `old_version_tab`: adds another old-version copy.
+- `hidden_reconciliation_tab`: adds another hidden working tab.
+
+Example:
+
+```yaml
+severity: 5
+
+unreproducible_nightmare_mode:
+  enabled: true
+  use_llm_planner: true
+  llm_model: gemma-4-31b-it
+  gemini_api_key_env: GEMINI_API_KEY
+  llm_timeout_seconds: 20
+  notation_count: 30
+  extra_tool_count: 5
+  max_notation_length: 96
+```
+
+Put the Gemini API key in a local `.env` file in the directory where you run
+`pbc-chaos` to enable the Gemma-backed planner:
+
+```dotenv
+GEMINI_API_KEY=your-api-key
+```
+
+Without `GEMINI_API_KEY`, the feature still runs, but the sidecar metadata will
+show `agent_provider: langgraph_heuristic_fallback`.
+
 ## API
 
 ```python
 from config_loader import load_config
 from pbc_chaos.pbc_workbook import generate_pbc_workbook
 
-config = load_config("config/nightmare.yaml")
+config = load_config("config/unreproducible-nightmare.yaml")
 workbook = generate_pbc_workbook(company, period, config=config, seed=42)
 ```
-

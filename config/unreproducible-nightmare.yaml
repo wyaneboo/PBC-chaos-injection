@@ -1,0 +1,32 @@
+# Severity 5 plus a non-deterministic AI-style post-pass.
+#
+# This mode intentionally ignores the deterministic seed for the final review
+# pass. Use it when you want more human-looking notations and extra realistic
+# chaos instead of exact reproducibility.
+
+severity: 5
+
+unreproducible_nightmare_mode:
+  enabled: true
+  use_llm_planner: true
+  llm_model: gemma-4-31b-it
+  gemini_api_key_env: GEMINI_API_KEY
+  llm_timeout_seconds: 20
+  notation_count: 30
+  extra_tool_count: 5
+  max_notation_length: 96
+
+probabilities:
+  merged_cells: 1.0
+  hidden_rows: 1.0
+  hidden_columns: 1.0
+  duplicated_headers: 1.0
+  inserted_notes: 1.0
+  subtotal_rows: 1.0
+  wrong_period_rows: 1.0
+  renamed_columns: 1.0
+  stringified_numbers: 1.0
+  formula_errors: 1.0
+  multiple_tables_in_one_sheet: 1.0
+  old_version_tabs: 1.0
+  hidden_reconciliation_tabs: 1.0

@@ -1,3 +1,5 @@
+from random import Random
+
 from openpyxl import Workbook, load_workbook
 
 from pbc_chaos.workbook import layout_engine, workbook_mutations
@@ -51,6 +53,30 @@ def test_insert_blank_rows_and_columns_expands_bounds():
 
     assert updated.max_row == table.max_row + 1
     assert updated.max_col == table.max_col + 1
+
+
+def test_column_aliases_vary_for_same_canonical_header_across_sheets():
+    aliases = set()
+
+    for seed in range(30):
+        workbook = Workbook()
+        worksheet = workbook.active
+        worksheet.title = f"Sheet {seed}"
+        worksheet.append(["account_code"])
+        worksheet.append(["1000"])
+        table = workbook_mutations.find_used_range(worksheet)
+
+        mapping = workbook_mutations.rename_random_columns(
+            worksheet,
+            table,
+            count=1,
+            rng=Random(seed),
+            sheet_name=worksheet.title,
+        )
+        aliases.add(mapping["account_code"])
+
+    assert len(aliases) >= 8
+    assert "A/C" in aliases or "GL Code" in aliases
 
 
 def test_reviewer_comments_and_status_cells_are_added():

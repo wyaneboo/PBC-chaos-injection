@@ -151,11 +151,15 @@ def generate_single_workbook(
     seed: int | None = None,
     company_id: str | None = None,
     filename_stem: str | None = None,
+    unreproducible_nightmare_mode: bool = False,
 ) -> BatchGenerationResult:
     """Generate one workbook, sidecar JSON, and a one-row manifest."""
 
     period = parse_period(period_label)
-    config = config_from_chaos_level(chaos_level)
+    config = config_from_chaos_level(
+        chaos_level,
+        unreproducible_nightmare_mode=unreproducible_nightmare_mode,
+    )
     company = CompanyProfile(
         company_id=company_id or company_id_from_name(company_name),
         company_name=company_name.strip(),
@@ -193,11 +197,15 @@ def generate_batch_workbooks(
     chaos_level: int,
     output_dir: str | Path,
     seed: int = 1,
+    unreproducible_nightmare_mode: bool = False,
 ) -> BatchGenerationResult:
     """Generate many workbooks at one chaos level."""
 
     period = parse_period(period_label)
-    config = config_from_chaos_level(chaos_level)
+    config = config_from_chaos_level(
+        chaos_level,
+        unreproducible_nightmare_mode=unreproducible_nightmare_mode,
+    )
     companies = simulated_companies(company_count, seed=seed)
     records = tuple(
         _generate_company_record(
@@ -226,6 +234,7 @@ def generate_mixed_chaos_dataset(
     max_chaos: int,
     output_dir: str | Path,
     seed: int = 1,
+    unreproducible_nightmare_mode: bool = False,
 ) -> BatchGenerationResult:
     """Generate a dataset with chaos levels distributed across a range."""
 
@@ -247,7 +256,10 @@ def generate_mixed_chaos_dataset(
             _generate_company_record(
                 company=company,
                 period=period,
-                config=config_from_chaos_level(chaos_level),
+                config=config_from_chaos_level(
+                    chaos_level,
+                    unreproducible_nightmare_mode=unreproducible_nightmare_mode,
+                ),
                 chaos_level=chaos_level,
                 output_dir=output_dir,
                 seed=seed + index,
@@ -371,10 +383,17 @@ def parse_period(period_label: str) -> FinancialPeriod:
     return FinancialPeriod.calendar_year(int(match.group("year")))
 
 
-def config_from_chaos_level(chaos_level: int) -> ChaosWorkbookConfig:
+def config_from_chaos_level(
+    chaos_level: int,
+    *,
+    unreproducible_nightmare_mode: bool = False,
+) -> ChaosWorkbookConfig:
     """Build a workbook config from an integer chaos level."""
 
-    return config_from_mapping({"severity": validate_chaos_level(chaos_level)})
+    raw: dict[str, Any] = {"severity": validate_chaos_level(chaos_level)}
+    if unreproducible_nightmare_mode:
+        raw["unreproducible_nightmare_mode"] = {"enabled": True}
+    return config_from_mapping(raw)
 
 
 def validate_chaos_level(chaos_level: int, *, label: str = "chaos-level") -> int:

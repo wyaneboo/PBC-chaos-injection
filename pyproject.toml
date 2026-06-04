@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "faker>=25.0",
+  "langgraph>=1.0",
   "numpy>=1.26",
   "openpyxl>=3.1",
   "pandas>=2.2",
@@ -36,4 +37,3 @@ pythonpath = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-

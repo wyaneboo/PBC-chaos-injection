@@ -1,4 +1,5 @@
 import csv
+import json
 
 from openpyxl import Workbook
 from typer.testing import CliRunner
@@ -52,6 +53,36 @@ def test_generate_mixed_dataset_cycles_requested_chaos_levels(tmp_path):
     rows = list(csv.DictReader(result.manifest_path.open(encoding="utf-8")))
     assert len(rows) == 3
     assert {row["chaos_level"] for row in rows} == {"0", "1", "2"}
+
+
+def test_cli_generate_dataset_accepts_unreproducible_nightmare_flag(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+
+    result = CliRunner().invoke(
+        app,
+        [
+            "generate-dataset",
+            "--companies",
+            "1",
+            "--min-chaos",
+            "0",
+            "--max-chaos",
+            "0",
+            "--output",
+            str(tmp_path),
+            "--unreproducible-nightmare",
+        ],
+    )
+
+    assert result.exit_code == 0
+    sidecar_path = next(tmp_path.glob("*.groundtruth.json"))
+    metadata = json.loads(sidecar_path.read_text(encoding="utf-8"))
+    assert metadata["chaos_level"]["unreproducible_nightmare_mode"]["enabled"]
+    assert any(
+        error["type"] == "unreproducible_nightmare_plan"
+        for error in metadata["intentional_errors"]
+    )
 
 
 def test_validate_reports_missing_groundtruth(tmp_path):

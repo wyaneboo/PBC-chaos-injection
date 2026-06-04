@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 from random import Random
 from typing import Any, Mapping
@@ -65,11 +65,72 @@ class ChaosProbabilities:
 
 
 @dataclass(frozen=True)
+class UnreproducibleNightmareModeConfig:
+    """Optional non-deterministic post-pass for extra realistic workbook mess."""
+
+    enabled: bool = False
+    use_llm_planner: bool = True
+    llm_model: str = "gemma-4-31b-it"
+    gemini_api_key_env: str = "GEMINI_API_KEY"
+    llm_timeout_seconds: int = 20
+    notation_count: int = 24
+    extra_tool_count: int = 4
+    max_notation_length: int = 96
+
+    @classmethod
+    def from_raw(cls, raw: Any) -> "UnreproducibleNightmareModeConfig":
+        if raw is None:
+            return cls()
+        if isinstance(raw, bool):
+            return cls(enabled=raw)
+        if not isinstance(raw, Mapping):
+            raise ValueError("unreproducible_nightmare_mode must be a boolean or mapping.")
+
+        allowed = {field.name for field in fields(cls)}
+        unknown = set(raw) - allowed
+        if unknown:
+            names = ", ".join(sorted(unknown))
+            raise ValueError(f"Unknown unreproducible_nightmare_mode config keys: {names}")
+
+        defaults = cls()
+        values = {}
+        for field_info in fields(cls):
+            values[field_info.name] = raw.get(field_info.name, getattr(defaults, field_info.name))
+        if not isinstance(values["enabled"], bool):
+            raise ValueError("unreproducible_nightmare_mode.enabled must be true or false.")
+        if not isinstance(values["use_llm_planner"], bool):
+            raise ValueError("unreproducible_nightmare_mode.use_llm_planner must be true or false.")
+        for key in ("llm_model", "gemini_api_key_env"):
+            value = values[key]
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"unreproducible_nightmare_mode.{key} must be a non-empty string.")
+            values[key] = value.strip()
+        for key in (
+            "notation_count",
+            "extra_tool_count",
+            "max_notation_length",
+            "llm_timeout_seconds",
+        ):
+            value = values[key]
+            if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+                raise ValueError(f"unreproducible_nightmare_mode.{key} must be a non-negative integer.")
+        if values["llm_timeout_seconds"] == 0:
+            raise ValueError("unreproducible_nightmare_mode.llm_timeout_seconds must be greater than 0.")
+        return cls(**values)
+
+    def as_dict(self) -> dict[str, Any]:
+        return {field.name: getattr(self, field.name) for field in fields(self)}
+
+
+@dataclass(frozen=True)
 class ChaosWorkbookConfig:
     """Validated Phase 7 config used by workbook generation."""
 
     severity: int
     probabilities: ChaosProbabilities
+    unreproducible_nightmare_mode: UnreproducibleNightmareModeConfig = (
+        field(default_factory=UnreproducibleNightmareModeConfig)
+    )
 
     @property
     def severity_description(self) -> str:
@@ -266,7 +327,7 @@ def load_config(path: str | Path) -> ChaosWorkbookConfig:
 def config_from_mapping(raw: Mapping[str, Any]) -> ChaosWorkbookConfig:
     """Build a validated config, applying severity defaults for omitted values."""
 
-    allowed = {"severity", "probabilities"}
+    allowed = {"severity", "probabilities", "unreproducible_nightmare_mode"}
     unknown = set(raw) - allowed
     if unknown:
         names = ", ".join(sorted(unknown))
@@ -291,6 +352,9 @@ def config_from_mapping(raw: Mapping[str, Any]) -> ChaosWorkbookConfig:
     return ChaosWorkbookConfig(
         severity=severity,
         probabilities=ChaosProbabilities.from_mapping(merged),
+        unreproducible_nightmare_mode=UnreproducibleNightmareModeConfig.from_raw(
+            raw.get("unreproducible_nightmare_mode")
+        ),
     )
 
 
@@ -316,4 +380,3 @@ def _count_from_probability(
         return 1
     upper = max(1, min(max_count, 1 + severity // 2))
     return rng.randint(1, upper)
-

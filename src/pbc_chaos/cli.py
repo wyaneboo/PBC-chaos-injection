@@ -31,6 +31,11 @@ def generate_one(
     period: str = typer.Option(..., "--period", help="Financial period, for example FY2025."),
     chaos_level: int = typer.Option(..., "--chaos-level", help="Integer chaos level from 0 to 5."),
     seed: int | None = typer.Option(None, "--seed", help="Optional deterministic seed."),
+    unreproducible_nightmare: bool = typer.Option(
+        False,
+        "--unreproducible-nightmare",
+        help="Enable the non-deterministic AI-style nightmare post-pass.",
+    ),
     output: Path = typer.Option(
         Path("outputs"),
         "--output",
@@ -46,6 +51,7 @@ def generate_one(
             chaos_level=chaos_level,
             output_dir=output,
             seed=seed,
+            unreproducible_nightmare_mode=unreproducible_nightmare,
         )
     )
     _echo_generation_summary(result)
@@ -58,6 +64,11 @@ def generate_batch(
     chaos_level: int = typer.Option(..., "--chaos-level", help="Integer chaos level from 0 to 5."),
     output: Path = typer.Option(..., "--output", help="Output directory for generated files."),
     seed: int = typer.Option(1, "--seed", help="Deterministic base seed."),
+    unreproducible_nightmare: bool = typer.Option(
+        False,
+        "--unreproducible-nightmare",
+        help="Enable the non-deterministic AI-style nightmare post-pass for every workbook.",
+    ),
 ) -> None:
     """Generate many workbooks at a single chaos level."""
 
@@ -68,6 +79,7 @@ def generate_batch(
             chaos_level=chaos_level,
             output_dir=output,
             seed=seed,
+            unreproducible_nightmare_mode=unreproducible_nightmare,
         )
     )
     _echo_generation_summary(result)
@@ -81,6 +93,11 @@ def generate_dataset(
     output: Path = typer.Option(..., "--output", help="Output directory for generated files."),
     period: str = typer.Option("FY2025", "--period", help="Financial period, for example FY2025."),
     seed: int = typer.Option(1, "--seed", help="Deterministic base seed."),
+    unreproducible_nightmare: bool = typer.Option(
+        False,
+        "--unreproducible-nightmare",
+        help="Enable the non-deterministic AI-style nightmare post-pass for every workbook.",
+    ),
 ) -> None:
     """Generate many workbooks with mixed chaos levels."""
 
@@ -92,6 +109,7 @@ def generate_dataset(
             max_chaos=max_chaos,
             output_dir=output,
             seed=seed,
+            unreproducible_nightmare_mode=unreproducible_nightmare,
         )
     )
     _echo_generation_summary(result)
@@ -189,7 +207,14 @@ def score_extraction(
 
 
 @app.command()
-def generate(config: Path = typer.Option(Path("configs/default.yaml"), exists=True)) -> None:
+def generate(
+    config: Path = typer.Option(Path("configs/default.yaml"), exists=True),
+    unreproducible_nightmare: bool = typer.Option(
+        False,
+        "--unreproducible-nightmare",
+        help="Enable the non-deterministic AI-style nightmare post-pass for every workbook.",
+    ),
+) -> None:
     """Generate a batch run from a legacy YAML config."""
 
     settings = _handle_cli_error(lambda: load_settings(config))
@@ -203,6 +228,7 @@ def generate(config: Path = typer.Option(Path("configs/default.yaml"), exists=Tr
             chaos_level=chaos_level,
             output_dir=settings.run.output_dir,
             seed=settings.run.seed,
+            unreproducible_nightmare_mode=unreproducible_nightmare,
         )
     )
     _echo_generation_summary(result)

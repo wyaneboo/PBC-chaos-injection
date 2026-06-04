@@ -10,6 +10,7 @@ from openpyxl import Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
 
 from pbc_chaos.config_loader import ChaosWorkbookConfig, config_from_mapping, load_config
+from pbc_chaos.chaos.unreproducible_nightmare import apply_unreproducible_nightmare_mode
 from pbc_chaos.generators.base import CompanyProfile, FinancialPeriod, GeneratedDocument
 from pbc_chaos.generators.expense_claims import ExpenseClaimListingGenerator
 from pbc_chaos.metadata.logger import GroundTruthLogger
@@ -110,6 +111,12 @@ def generate_pbc_workbook_with_ground_truth(
     workbook.properties.subject = (
         f"Chaos severity {resolved.severity}: {resolved.severity_description}"
     )
+    if resolved.unreproducible_nightmare_mode.enabled:
+        apply_unreproducible_nightmare_mode(
+            workbook=workbook,
+            logger=logger,
+            config=resolved.unreproducible_nightmare_mode,
+        )
     logger.record_discrepancies(context.discrepancy_metadata)
     return GeneratedPBCWorkbook(
         workbook=workbook,

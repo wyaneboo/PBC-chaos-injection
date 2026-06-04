@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from hashlib import sha256
 from math import isfinite
+from secrets import token_hex
 from typing import Any
 
 import pandas as pd
@@ -111,6 +112,11 @@ class GroundTruthLogger:
     def record_discrepancies(self, discrepancies: list[dict[str, Any]] | tuple[dict[str, Any], ...]) -> None:
         self.injected_discrepancies = [_json_safe(discrepancy) for discrepancy in discrepancies]
 
+    def sheet_names(self) -> tuple[str, ...]:
+        """Return primary sheet names tracked in ground-truth metadata."""
+
+        return tuple(self._sheet_order)
+
     def build_ground_truth(self, workbook) -> WorkbookGroundTruth:
         """Finalize and return the workbook-level ground-truth object."""
 
@@ -138,6 +144,9 @@ class GroundTruthLogger:
                 "severity": self.config.severity,
                 "description": self.config.severity_description,
                 "probabilities": self.config.probabilities.as_dict(),
+                "unreproducible_nightmare_mode": (
+                    self.config.unreproducible_nightmare_mode.as_dict()
+                ),
             },
             document_types_included=document_types,
             sheet_names=tuple(workbook.sheetnames),
@@ -198,7 +207,10 @@ def _workbook_id(
     config: ChaosWorkbookConfig,
     seed: int | None,
 ) -> str:
-    payload = f"{company.company_id}:{period.financial_year}:{config.severity}:{seed}".encode("utf-8")
+    payload_parts = [company.company_id, str(period.financial_year), str(config.severity), str(seed)]
+    if config.unreproducible_nightmare_mode.enabled:
+        payload_parts.extend(("unreproducible", token_hex(8)))
+    payload = ":".join(payload_parts).encode("utf-8")
     return f"wb_{sha256(payload).hexdigest()[:16]}"
 
 

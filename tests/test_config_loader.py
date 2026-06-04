@@ -2,7 +2,7 @@ from pathlib import Path
 
 from pbc_chaos.generators.base import CompanyProfile, FinancialPeriod
 from pbc_chaos.config_loader import config_from_mapping, load_config
-from pbc_chaos.pbc_workbook import generate_pbc_workbook
+from pbc_chaos.pbc_workbook import generate_pbc_workbook, generate_pbc_workbook_with_ground_truth
 
 
 def company_and_period():
@@ -27,6 +27,23 @@ def test_load_config_applies_severity_defaults_for_missing_probabilities():
     assert config.probabilities.inserted_notes > 0
 
 
+def test_config_loader_accepts_unreproducible_nightmare_mode():
+    config = config_from_mapping(
+        {
+            "severity": 5,
+            "unreproducible_nightmare_mode": {
+                "enabled": True,
+                "notation_count": 7,
+                "extra_tool_count": 2,
+            },
+        }
+    )
+
+    assert config.unreproducible_nightmare_mode.enabled
+    assert config.unreproducible_nightmare_mode.notation_count == 7
+    assert config.unreproducible_nightmare_mode.extra_tool_count == 2
+
+
 def test_config_loader_rejects_invalid_values():
     invalid_configs = (
         {"severity": 6},
@@ -34,6 +51,7 @@ def test_config_loader_rejects_invalid_values():
         {"severity": 2, "probabilities": {"hidden_rows": 1.5}},
         {"severity": 2, "probabilities": {"not_a_probability": 0.1}},
         {"severity": 2, "unexpected": True},
+        {"severity": 5, "unreproducible_nightmare_mode": {"notation_count": -1}},
     )
 
     for raw in invalid_configs:
@@ -75,3 +93,54 @@ def test_nightmare_config_applies_all_chaos_categories():
         for row in worksheet.iter_rows()
         for cell in row
     )
+
+
+def test_unreproducible_nightmare_mode_adds_ai_notations_and_plan_metadata():
+    company, period = company_and_period()
+    config = config_from_mapping(
+        {
+            "severity": 1,
+            "unreproducible_nightmare_mode": {
+                "enabled": True,
+                "use_llm_planner": False,
+                "notation_count": 6,
+                "extra_tool_count": 0,
+            },
+        }
+    )
+
+    generated = generate_pbc_workbook_with_ground_truth(company, period, config=config, seed=42)
+    metadata = generated.ground_truth.as_dict()
+    notes = [
+        note
+        for sheet in metadata["sheets"]
+        for note in sheet["inserted_notes"]
+        if note["type"] == "ai_random_notation"
+    ]
+
+    assert metadata["chaos_level"]["unreproducible_nightmare_mode"]["enabled"]
+    assert notes
+    assert any(
+        error["type"] == "unreproducible_nightmare_plan"
+        for error in metadata["intentional_errors"]
+    )
+
+
+def test_unreproducible_nightmare_mode_changes_identity_for_same_seed():
+    company, period = company_and_period()
+    config = config_from_mapping(
+        {
+            "severity": 1,
+            "unreproducible_nightmare_mode": {
+                "enabled": True,
+                "use_llm_planner": False,
+                "notation_count": 1,
+                "extra_tool_count": 0,
+            },
+        }
+    )
+
+    first = generate_pbc_workbook_with_ground_truth(company, period, config=config, seed=42)
+    second = generate_pbc_workbook_with_ground_truth(company, period, config=config, seed=42)
+
+    assert first.ground_truth.workbook_id != second.ground_truth.workbook_id

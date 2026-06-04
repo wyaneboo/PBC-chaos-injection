@@ -42,6 +42,17 @@
 
 severity: 3
 
+# Optional non-deterministic post-pass. Leave disabled for reproducible outputs.
+# unreproducible_nightmare_mode:
+#   enabled: false
+#   use_llm_planner: true
+#   llm_model: gemma-4-31b-it
+#   gemini_api_key_env: GEMINI_API_KEY
+#   llm_timeout_seconds: 20
+#   notation_count: 24
+#   extra_tool_count: 4
+#   max_notation_length: 96
+
 probabilities:
   merged_cells: 0.45
   hidden_rows: 0.18
@@ -56,4 +67,3 @@ probabilities:
   multiple_tables_in_one_sheet: 0.15
   old_version_tabs: 0.35
   hidden_reconciliation_tabs: 0.25
-

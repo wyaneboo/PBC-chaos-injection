@@ -58,6 +58,101 @@ src/pbc_chaos/
 tests/                    architecture contract tests
 ```
 
+## First-Time User Guide
+
+Follow these steps from the repository root.
+
+1. Check Python.
+
+   Use Python 3.11 or newer:
+
+   ```powershell
+   python --version
+   ```
+
+2. Create and activate a virtual environment.
+
+   ```powershell
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   ```
+
+3. Install the project.
+
+   Install with development tools if you want to run tests:
+
+   ```powershell
+   python -m pip install --upgrade pip
+   python -m pip install -e ".[dev]"
+   ```
+
+   For generation only, this is enough:
+
+   ```powershell
+   python -m pip install -e .
+   ```
+
+4. Set up secrets only if you want unreproducible nightmare mode.
+
+   Copy the example file and put your real Gemini API key in `.env`:
+
+   ```powershell
+   Copy-Item .env.example .env
+   notepad .env
+   ```
+
+   The file should contain:
+
+   ```dotenv
+   GEMINI_API_KEY=your-gemini-api-key
+   ```
+
+   Keep `.env` local. It is ignored by Git.
+
+5. Generate one workbook.
+
+   ```powershell
+   pbc-chaos generate-one --company "ABC Sdn Bhd" --period "FY2025" --chaos-level 3 --seed 42 --output ./data/generated
+   ```
+
+   This writes an `.xlsx`, a matching `.groundtruth.json`, and `manifest.csv`.
+
+6. Generate a nightmare workbook.
+
+   This uses the LangGraph post-pass. If `.env` has `GEMINI_API_KEY`, the Gemma
+   planner is used; otherwise the local heuristic planner is used.
+
+   ```powershell
+   pbc-chaos generate-one --company "ABC Sdn Bhd" --period "FY2025" --chaos-level 5 --unreproducible-nightmare --output ./data/nightmare
+   ```
+
+7. Generate a dataset.
+
+   ```powershell
+   pbc-chaos generate-dataset --companies 25 --min-chaos 0 --max-chaos 5 --output ./data/dataset
+   ```
+
+   Add `--unreproducible-nightmare` if every generated workbook should get the
+   non-deterministic review-agent post-pass.
+
+8. Validate generated files.
+
+   ```powershell
+   pbc-chaos validate --input ./data/generated
+   pbc-chaos validate --input ./data/dataset
+   ```
+
+9. Run the tests.
+
+   ```powershell
+   pytest
+   ```
+
+10. Inspect the outputs.
+
+    Open the `.xlsx` file in Excel or LibreOffice. Use the `.groundtruth.json`
+    sidecar to compare what a parser or AI extraction tool should have found.
+
 ## CLI Usage
 
 Install the package in editable mode if the `pbc-chaos` command is not already
@@ -73,6 +168,19 @@ Generate one workbook:
 pbc-chaos generate-one --company "ABC Sdn Bhd" --period "FY2025" --chaos-level 4 --seed 42
 ```
 
+Generate a nightmare workbook with the non-deterministic Gemma-backed review
+agent:
+
+Create a local `.env` file in the directory where you run `pbc-chaos`:
+
+```dotenv
+GEMINI_API_KEY=your-gemini-api-key
+```
+
+```powershell
+pbc-chaos generate-one --company "ABC Sdn Bhd" --period "FY2025" --chaos-level 5 --unreproducible-nightmare --output ./data/generated
+```
+
 Generate a batch of simulated companies at one chaos level:
 
 ```powershell
@@ -85,6 +193,9 @@ Generate a mixed-chaos dataset. The dataset command defaults to `FY2025` unless
 ```powershell
 pbc-chaos generate-dataset --companies 100 --min-chaos 0 --max-chaos 5 --output ./data/dataset
 ```
+
+Add `--unreproducible-nightmare` to any generation command when you want the
+non-deterministic review agent post-pass.
 
 Validate generated workbooks and ground-truth JSON sidecars:
 
@@ -241,6 +352,47 @@ workbook = generate_pbc_workbook(company, period, config=config, seed=42)
 ```
 
 See `docs/chaos-severity-config.md` for every severity level and probability option.
+
+### Unreproducible Nightmare Mode
+
+`unreproducible_nightmare_mode` is an optional post-pass for severity 5 style
+workbooks. The normal deterministic workbook is generated first, then a review
+agent chooses extra chaos actions and adds human-style notations anywhere in the
+spreadsheet as visible reminder cells or Excel comments.
+
+The LLM planner uses Google's Gemini API with `gemma-4-31b-it` by default:
+
+```yaml
+severity: 5
+
+unreproducible_nightmare_mode:
+  enabled: true
+  use_llm_planner: true
+  llm_model: gemma-4-31b-it
+  gemini_api_key_env: GEMINI_API_KEY
+  notation_count: 30
+  extra_tool_count: 5
+```
+
+Use the ready-made config:
+
+```python
+from pbc_chaos.config_loader import load_config
+from pbc_chaos.pbc_workbook import generate_pbc_workbook
+
+config = load_config("config/unreproducible-nightmare.yaml")
+workbook = generate_pbc_workbook(company, period, config=config, seed=42)
+```
+
+The mode always runs through LangGraph. If `GEMINI_API_KEY` is not set, the
+LangGraph planning node uses the local heuristic planner and records the
+fallback reason in the ground-truth sidecar. Because this mode intentionally
+uses non-seeded randomness in the final review pass, two runs with the same seed
+can produce different workbook IDs, notations, and extra chaos choices.
+
+Store the actual Gemini API key in a local `.env` file in the current working
+directory. `.env` is ignored by Git; `.env.example` documents the required
+variable name.
 
 ## Ground Truth Metadata
 

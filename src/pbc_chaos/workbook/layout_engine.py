@@ -159,6 +159,7 @@ def apply_layout_chaos(
         table,
         count=resolved.rename_column_count,
         rng=rng,
+        sheet_name=worksheet.title,
     )
     if metadata_logger is not None:
         metadata_logger.record_renamed_columns(worksheet.title, renamed_columns)
