@@ -7,6 +7,7 @@ from pathlib import Path
 from random import Random
 from typing import Any, Mapping
 
+from pbc_chaos.core.types import DocumentType
 from pbc_chaos.generators.base import CompanyProfile, FinancialPeriod
 from pbc_chaos.workbook.layout_engine import LayoutChaosConfig
 
@@ -38,6 +39,12 @@ class ChaosProbabilities:
     multiple_tables_in_one_sheet: float
     old_version_tabs: float
     hidden_reconciliation_tabs: float
+    pbc_request_list: float
+    tracker_status_noise: float
+    tracker_deadline_noise: float
+    tracker_visible_comments: float
+    tracker_update_highlights: float
+    tracker_instruction_blocks: float
 
     @classmethod
     def from_mapping(cls, raw: Mapping[str, Any]) -> "ChaosProbabilities":
@@ -145,6 +152,7 @@ class ChaosWorkbookConfig:
         seed: int | None,
         sheet_index: int,
         hidden_recon_allowed: bool,
+        document_type: DocumentType | None = None,
     ) -> LayoutChaosConfig:
         """Convert probability controls into concrete layout mutations for one sheet."""
 
@@ -158,6 +166,7 @@ class ChaosWorkbookConfig:
 
         rng = Random(_sheet_seed(seed, sheet_index))
         p = self.probabilities
+        is_tracker = document_type == DocumentType.PBC_REQUEST_LIST
         return LayoutChaosConfig(
             enabled=True,
             client_name=company.company_name,
@@ -212,6 +221,12 @@ class ChaosWorkbookConfig:
             old_version_tab_count=max(1, min(3, self.severity // 2 + 1)),
             add_hidden_reconciliation_tabs=hidden_recon_allowed
             and _roll(p.hidden_reconciliation_tabs, rng),
+            pbc_request_list_layout=is_tracker and _roll(p.pbc_request_list, rng),
+            tracker_status_noise=_roll(p.tracker_status_noise, rng),
+            tracker_deadline_noise=_roll(p.tracker_deadline_noise, rng),
+            tracker_visible_comments=_roll(p.tracker_visible_comments, rng),
+            tracker_update_highlights=_roll(p.tracker_update_highlights, rng),
+            tracker_instruction_blocks=_roll(p.tracker_instruction_blocks, rng),
         )
 
 
@@ -230,6 +245,12 @@ DEFAULT_PROBABILITIES_BY_SEVERITY: dict[int, ChaosProbabilities] = {
         multiple_tables_in_one_sheet=0.0,
         old_version_tabs=0.0,
         hidden_reconciliation_tabs=0.0,
+        pbc_request_list=0.0,
+        tracker_status_noise=0.0,
+        tracker_deadline_noise=0.0,
+        tracker_visible_comments=0.0,
+        tracker_update_highlights=0.0,
+        tracker_instruction_blocks=0.0,
     ),
     1: ChaosProbabilities(
         merged_cells=0.10,
@@ -245,6 +266,12 @@ DEFAULT_PROBABILITIES_BY_SEVERITY: dict[int, ChaosProbabilities] = {
         multiple_tables_in_one_sheet=0.00,
         old_version_tabs=0.05,
         hidden_reconciliation_tabs=0.02,
+        pbc_request_list=0.40,
+        tracker_status_noise=0.20,
+        tracker_deadline_noise=0.15,
+        tracker_visible_comments=0.20,
+        tracker_update_highlights=0.15,
+        tracker_instruction_blocks=0.35,
     ),
     2: ChaosProbabilities(
         merged_cells=0.25,
@@ -260,6 +287,12 @@ DEFAULT_PROBABILITIES_BY_SEVERITY: dict[int, ChaosProbabilities] = {
         multiple_tables_in_one_sheet=0.05,
         old_version_tabs=0.15,
         hidden_reconciliation_tabs=0.10,
+        pbc_request_list=0.65,
+        tracker_status_noise=0.40,
+        tracker_deadline_noise=0.35,
+        tracker_visible_comments=0.40,
+        tracker_update_highlights=0.35,
+        tracker_instruction_blocks=0.60,
     ),
     3: ChaosProbabilities(
         merged_cells=0.45,
@@ -275,6 +308,12 @@ DEFAULT_PROBABILITIES_BY_SEVERITY: dict[int, ChaosProbabilities] = {
         multiple_tables_in_one_sheet=0.15,
         old_version_tabs=0.35,
         hidden_reconciliation_tabs=0.25,
+        pbc_request_list=0.85,
+        tracker_status_noise=0.62,
+        tracker_deadline_noise=0.55,
+        tracker_visible_comments=0.62,
+        tracker_update_highlights=0.55,
+        tracker_instruction_blocks=0.80,
     ),
     4: ChaosProbabilities(
         merged_cells=0.65,
@@ -290,6 +329,12 @@ DEFAULT_PROBABILITIES_BY_SEVERITY: dict[int, ChaosProbabilities] = {
         multiple_tables_in_one_sheet=0.35,
         old_version_tabs=0.55,
         hidden_reconciliation_tabs=0.45,
+        pbc_request_list=1.0,
+        tracker_status_noise=0.85,
+        tracker_deadline_noise=0.78,
+        tracker_visible_comments=0.82,
+        tracker_update_highlights=0.75,
+        tracker_instruction_blocks=1.0,
     ),
     5: ChaosProbabilities(
         merged_cells=0.90,
@@ -305,6 +350,12 @@ DEFAULT_PROBABILITIES_BY_SEVERITY: dict[int, ChaosProbabilities] = {
         multiple_tables_in_one_sheet=0.65,
         old_version_tabs=0.80,
         hidden_reconciliation_tabs=0.70,
+        pbc_request_list=1.0,
+        tracker_status_noise=1.0,
+        tracker_deadline_noise=1.0,
+        tracker_visible_comments=1.0,
+        tracker_update_highlights=1.0,
+        tracker_instruction_blocks=1.0,
     ),
 }
 

@@ -298,6 +298,7 @@ Dataset manifests use this schema:
 The generator registry has placeholders for:
 
 - Trial Balance
+- PBC Request List
 - General Ledger
 - AP Aging
 - AR Aging
@@ -358,7 +359,11 @@ See `docs/chaos-severity-config.md` for every severity level and probability opt
 `unreproducible_nightmare_mode` is an optional post-pass for severity 5 style
 workbooks. The normal deterministic workbook is generated first, then a review
 agent chooses extra chaos actions and adds human-style notations anywhere in the
-spreadsheet as visible reminder cells or Excel comments.
+spreadsheet as visible reminder cells or Excel comments. Workbooks also include
+a PBC request tracker sheet; severity 4 and 5 configs add tracker-specific
+workflow chaos such as mixed statuses, unclear due dates, follow-up flags,
+visible auditor comments, highlighted update rows, and client instruction
+blocks.
 
 The LLM planner uses Google's Gemini API with `gemma-4-31b-it` by default:
 

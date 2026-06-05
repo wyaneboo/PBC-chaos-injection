@@ -17,4 +17,9 @@ probabilities:
   multiple_tables_in_one_sheet: 1.0
   old_version_tabs: 1.0
   hidden_reconciliation_tabs: 1.0
-
+  pbc_request_list: 1.0
+  tracker_status_noise: 1.0
+  tracker_deadline_noise: 1.0
+  tracker_visible_comments: 1.0
+  tracker_update_highlights: 1.0
+  tracker_instruction_blocks: 1.0

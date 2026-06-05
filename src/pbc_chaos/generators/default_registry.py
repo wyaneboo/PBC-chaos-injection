@@ -13,6 +13,7 @@ from pbc_chaos.generators.placeholders import (
     InsuranceProductionReportGenerator,
     InventoryListingGenerator,
     JournalEntryListingGenerator,
+    PBCRequestListGenerator,
     PayrollDetailGenerator,
     PayrollSummaryGenerator,
     SSTGSTReportGenerator,
@@ -26,6 +27,7 @@ from pbc_chaos.generators.registry import DocumentGeneratorRegistry
 def build_default_registry() -> DocumentGeneratorRegistry:
     registry = DocumentGeneratorRegistry()
     for generator in (
+        PBCRequestListGenerator(),
         TrialBalanceGenerator(),
         GeneralLedgerGenerator(),
         APAgingGenerator(),
@@ -47,4 +49,3 @@ def build_default_registry() -> DocumentGeneratorRegistry:
     ):
         registry.register(generator)
     return registry
-

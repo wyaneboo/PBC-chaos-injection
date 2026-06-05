@@ -13,6 +13,7 @@ from pbc_chaos.config_loader import ChaosWorkbookConfig, config_from_mapping, lo
 from pbc_chaos.chaos.unreproducible_nightmare import apply_unreproducible_nightmare_mode
 from pbc_chaos.generators.base import CompanyProfile, FinancialPeriod, GeneratedDocument
 from pbc_chaos.generators.expense_claims import ExpenseClaimListingGenerator
+from pbc_chaos.generators.pbc_request_list import PBCRequestListGenerator
 from pbc_chaos.metadata.logger import GroundTruthLogger
 from pbc_chaos.metadata.schema import WorkbookGroundTruth
 from pbc_chaos.reconciliation import (
@@ -32,6 +33,7 @@ from pbc_chaos.workbook import layout_engine
 
 
 SHEET_NAMES = {
+    "pbc_request_list": "PBC Request List",
     "trial_balance": "Trial Balance",
     "general_ledger": "General Ledger",
     "ap_aging": "AP Aging",
@@ -97,7 +99,8 @@ def generate_pbc_workbook_with_ground_truth(
             title=f"{sheet_name} - PBC support",
             seed=seed,
             sheet_index=index,
-            hidden_recon_allowed=True,
+            hidden_recon_allowed=document.document_type.value != "pbc_request_list",
+            document_type=document.document_type,
         )
         layout_engine.apply_layout_chaos(
             workbook=workbook,
@@ -144,6 +147,11 @@ def _generate_documents(
 ) -> tuple[ReconciliationContext, tuple[GeneratedDocument, ...]]:
     context = ReconciliationContext(company, period, seed=seed)
     documents = [
+        PBCRequestListGenerator().generate(
+            company=company,
+            period=period,
+            seed=(0 if seed is None else seed) + 40_000,
+        ),
         generate_trial_balance(context),
         generate_general_ledger(context),
         generate_bank_reconciliation(context),

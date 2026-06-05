@@ -8,6 +8,7 @@ from pbc_chaos.generators.fixed_assets import FixedAssetRegisterGenerator
 from pbc_chaos.generators.general_ledger import GeneralLedgerGenerator
 from pbc_chaos.generators.inventory import InventoryListingGenerator
 from pbc_chaos.generators.journal_entries import JournalEntryListingGenerator
+from pbc_chaos.generators.pbc_request_list import PBCRequestListGenerator
 from pbc_chaos.generators.payroll import PayrollSummaryGenerator
 from pbc_chaos.generators.trial_balance import TrialBalanceGenerator
 
@@ -22,6 +23,7 @@ def company_and_period():
 def test_all_phase5_generators_return_dataframe_and_metadata():
     company, period = company_and_period()
     generators = (
+        PBCRequestListGenerator(),
         TrialBalanceGenerator(),
         GeneralLedgerGenerator(),
         APAgingGenerator(),
@@ -69,6 +71,7 @@ def test_general_ledger_and_journals_balance_by_journal():
 
 def test_requested_document_types_are_covered():
     generated_types = {
+        PBCRequestListGenerator().document_type,
         TrialBalanceGenerator().document_type,
         GeneralLedgerGenerator().document_type,
         APAgingGenerator().document_type,
@@ -83,6 +86,7 @@ def test_requested_document_types_are_covered():
 
     assert generated_types == {
         DocumentType.TRIAL_BALANCE,
+        DocumentType.PBC_REQUEST_LIST,
         DocumentType.GENERAL_LEDGER,
         DocumentType.AP_AGING,
         DocumentType.AR_AGING,

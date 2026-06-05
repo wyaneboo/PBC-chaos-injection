@@ -26,6 +26,130 @@ def rel(
     )
 
 
+PBC_REQUEST_LIST_SCHEMA = DocumentSchema(
+    document_type=DocumentType.PBC_REQUEST_LIST,
+    display_name="PBC Request List",
+    grain="One audit support request tracked by the client or audit team.",
+    primary_key=("client_id", "financial_year", "request_id"),
+    fields=COMMON_DOCUMENT_FIELDS
+    + (
+        nf(
+            "request_number",
+            Type.INTEGER,
+            Req.RECOMMENDED,
+            "Visible row number used in the request tracker.",
+            aliases=("No.", "No", "Line"),
+        ),
+        nf(
+            "request_id",
+            Type.IDENTIFIER,
+            Req.REQUIRED,
+            "PBC request identifier.",
+            aliases=("Request ID", "Req ID", "Ref"),
+            nullable=False,
+        ),
+        nf(
+            "request_description",
+            Type.STRING,
+            Req.REQUIRED,
+            "Support requested from the client.",
+            aliases=("Request / Description", "Request", "Description"),
+            nullable=False,
+        ),
+        nf(
+            "detail_remark",
+            Type.STRING,
+            Req.OPTIONAL,
+            "Detailed remark or scope qualifier for the request.",
+            aliases=("Details / Remark", "Details", "Remark"),
+        ),
+        nf("purpose", Type.STRING, Req.RECOMMENDED, "Audit purpose or assertion covered."),
+        nf(
+            "period_label",
+            Type.STRING,
+            Req.RECOMMENDED,
+            "Human-readable period requested, such as FY2024 or Dec 2024.",
+            aliases=("Period",),
+        ),
+        nf(
+            "file_type_requested",
+            Type.STRING,
+            Req.RECOMMENDED,
+            "Requested support format.",
+            aliases=("Format / File Type", "File Type", "Format"),
+        ),
+        nf(
+            "owner_pic",
+            Type.STRING,
+            Req.RECOMMENDED,
+            "Client owner or person in charge.",
+            aliases=("Owner (PIC)", "PIC", "Owner"),
+        ),
+        nf("due_date", Type.DATE, Req.RECOMMENDED, "Requested submission due date."),
+        nf(
+            "status",
+            Type.ENUM,
+            Req.RECOMMENDED,
+            "Client submission status.",
+            allowed_values=(
+                "not_started",
+                "in_progress",
+                "partial",
+                "received",
+                "done",
+                "not_applicable",
+            ),
+        ),
+        nf("date_received", Type.DATE, Req.OPTIONAL, "Date the support was received."),
+        nf(
+            "review_status",
+            Type.STRING,
+            Req.OPTIONAL,
+            "Audit team review status.",
+            aliases=("Review Status",),
+        ),
+        nf(
+            "auditor_comment",
+            Type.STRING,
+            Req.OPTIONAL,
+            "Visible auditor or finance-team comment.",
+            aliases=("Auditor Comment", "Comment"),
+        ),
+        nf(
+            "follow_up_required",
+            Type.BOOLEAN,
+            Req.RECOMMENDED,
+            "Whether follow-up is required.",
+            aliases=("Follow Up??", "Follow Up", "Reminder"),
+        ),
+        nf(
+            "update_flag",
+            Type.BOOLEAN,
+            Req.OPTIONAL,
+            "Whether the row is new or updated in the latest tracker version.",
+            aliases=("Updated", "New / Updated"),
+        ),
+        REMARKS,
+    ),
+    relationships=(
+        rel(
+            "request_list_to_trial_balance",
+            DocumentType.TRIAL_BALANCE,
+            "Trial balance requests should correspond to the generated trial balance sheet.",
+        ),
+        rel(
+            "request_list_to_general_ledger",
+            DocumentType.GENERAL_LEDGER,
+            "GL requests should correspond to the generated general ledger sheet.",
+        ),
+    ),
+    quality_rules=(
+        "Each request should have a stable request_id before tracker chaos.",
+        "Status and follow-up fields may be intentionally inconsistent after chaos.",
+    ),
+)
+
+
 TRIAL_BALANCE_SCHEMA = DocumentSchema(
     document_type=DocumentType.TRIAL_BALANCE,
     display_name="Trial Balance",
@@ -885,6 +1009,7 @@ EXPENSE_CLAIM_LISTING_SCHEMA = DocumentSchema(
 )
 
 ALL_DOCUMENT_SCHEMAS: tuple[DocumentSchema, ...] = (
+    PBC_REQUEST_LIST_SCHEMA,
     TRIAL_BALANCE_SCHEMA,
     GENERAL_LEDGER_SCHEMA,
     AP_AGING_SCHEMA,
@@ -904,4 +1029,3 @@ ALL_DOCUMENT_SCHEMAS: tuple[DocumentSchema, ...] = (
     JOURNAL_ENTRY_LISTING_SCHEMA,
     EXPENSE_CLAIM_LISTING_SCHEMA,
 )
-

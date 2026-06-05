@@ -29,6 +29,18 @@ from the selected severity profile.
 - `multiple_tables_in_one_sheet`: adds small side tables below the main support schedule.
 - `old_version_tabs`: adds visible old-version copies of selected sheets.
 - `hidden_reconciliation_tabs`: adds hidden client working/reconciliation tabs.
+- `pbc_request_list`: applies a dedicated PBC request tracker layout with
+  instruction blocks, owner/status columns, filters, and wrapped tracker rows.
+- `tracker_status_noise`: varies client and audit workflow statuses such as
+  `Done`, `done`, `received`, `partial`, `not yet`, `pending`, and `Under review`.
+- `tracker_deadline_noise`: varies due dates, received dates, and follow-up
+  flags with values like `15/5`, `16-May`, `??`, `???`, `Y?`, and blanks.
+- `tracker_visible_comments`: adds visible row comments such as missing pages,
+  hardcopy-only support, blurry scans, and quantity mismatches.
+- `tracker_update_highlights`: highlights rows or cells that look new or updated.
+- `tracker_instruction_blocks`: adds prominent client instructions such as PIC,
+  submit-by deadline, template reminders, contact notes, and late-submission
+  warnings.
 
 ## Unreproducible Nightmare Mode
 
@@ -51,6 +63,11 @@ The agent chooses extra chaos tool types such as:
 - `secondary_table`: adds another small working table.
 - `old_version_tab`: adds another old-version copy.
 - `hidden_reconciliation_tab`: adds another hidden working tab.
+- `add_visible_tracker_comment`: adds a bounded visible tracker comment.
+- `apply_tracker_status_variant`: changes a tracker row status to a human-style variant.
+- `apply_tracker_deadline_noise`: changes a tracker due date to a mixed or ambiguous value.
+- `highlight_tracker_update_row`: highlights a tracker row as new or updated.
+- `apply_tracker_follow_up_noise`: changes a tracker follow-up flag.
 
 Example:
 

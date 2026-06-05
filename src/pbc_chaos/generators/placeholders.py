@@ -8,6 +8,10 @@ class TrialBalanceGenerator(BaseDocumentGenerator):
     document_type = DocumentType.TRIAL_BALANCE
 
 
+class PBCRequestListGenerator(BaseDocumentGenerator):
+    document_type = DocumentType.PBC_REQUEST_LIST
+
+
 class GeneralLedgerGenerator(BaseDocumentGenerator):
     document_type = DocumentType.GENERAL_LEDGER
 
@@ -74,4 +78,3 @@ class JournalEntryListingGenerator(BaseDocumentGenerator):
 
 class ExpenseClaimListingGenerator(BaseDocumentGenerator):
     document_type = DocumentType.EXPENSE_CLAIM_LISTING
-

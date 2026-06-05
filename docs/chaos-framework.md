@@ -53,6 +53,16 @@ The default registry contains no-op placeholders in this order:
 These are framework participants only. Their actual mutation logic has not been
 implemented yet.
 
+## Concrete Workbook Path
+
+The current production workbook generator also has direct openpyxl mutation
+helpers for generated `.xlsx` files. The PBC request tracker chaos is implemented
+there first because it needs precise worksheet layout control: instruction
+blocks, filters, freeze panes, mixed status/date/comment cells, highlighted
+update rows, and bounded nightmare-agent row tools. These behaviors can later be
+ported into formal injector classes once the workbook-plan injector layer becomes
+the primary rendering path.
+
 ## Implementing a Real Injector Later
 
 Create a class that subclasses `BaseChaosInjector` and overrides `mutate`.
@@ -88,4 +98,3 @@ Randomness is seeded from:
 
 This lets the same run reproduce the same chaos while keeping each injector's
 random stream isolated.
-

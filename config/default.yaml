@@ -39,6 +39,18 @@
 #   Adds visible old-version copies of selected sheets.
 # hidden_reconciliation_tabs:
 #   Adds hidden client working/reconciliation tabs.
+# pbc_request_list:
+#   Applies a dedicated PBC request-list tracker layout.
+# tracker_status_noise:
+#   Adds inconsistent client submission and review status wording.
+# tracker_deadline_noise:
+#   Adds mixed due-date, received-date, and follow-up values.
+# tracker_visible_comments:
+#   Adds dense visible auditor/client comments in tracker rows.
+# tracker_update_highlights:
+#   Highlights new or updated tracker rows.
+# tracker_instruction_blocks:
+#   Adds prominent client instruction, PIC, template, and timeline warning blocks.
 
 severity: 3
 
@@ -67,3 +79,9 @@ probabilities:
   multiple_tables_in_one_sheet: 0.15
   old_version_tabs: 0.35
   hidden_reconciliation_tabs: 0.25
+  pbc_request_list: 0.85
+  tracker_status_noise: 0.62
+  tracker_deadline_noise: 0.55
+  tracker_visible_comments: 0.62
+  tracker_update_highlights: 0.55
+  tracker_instruction_blocks: 0.80

@@ -12,6 +12,7 @@ class ChaosSeverity(str, Enum):
 
 
 class DocumentType(str, Enum):
+    PBC_REQUEST_LIST = "pbc_request_list"
     TRIAL_BALANCE = "trial_balance"
     GENERAL_LEDGER = "general_ledger"
     AP_AGING = "ap_aging"
@@ -34,4 +35,3 @@ class DocumentType(str, Enum):
 
 class WorkbookFormat(str, Enum):
     XLSX = "xlsx"
-

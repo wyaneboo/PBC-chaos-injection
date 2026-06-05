@@ -19,6 +19,7 @@ from openpyxl.worksheet.worksheet import Worksheet
 
 from pbc_chaos.config_loader import UnreproducibleNightmareModeConfig
 from pbc_chaos.env import load_env_file
+from pbc_chaos.workbook import pbc_tracker_layout
 from pbc_chaos.workbook import workbook_mutations
 
 if TYPE_CHECKING:
@@ -139,10 +140,32 @@ class UnreproducibleNightmareAgent:
         for sheet_name, count in sorted(notation_allocations.items()):
             plan.append({"tool": "human_residue_notation", "sheet": sheet_name, "count": count})
 
-        for _ in range(self.config.extra_tool_count):
+        remaining_extra_tools = self.config.extra_tool_count
+        if (
+            remaining_extra_tools > 0
+            and pbc_tracker_layout.TRACKER_SHEET_NAME in visible_sheet_names
+        ):
+            plan.append(
+                {
+                    "tool": "add_visible_tracker_comment",
+                    "sheet": pbc_tracker_layout.TRACKER_SHEET_NAME,
+                    "text": self.rng.choice(
+                        (
+                            "Not provided, remind finance",
+                            "Hardcopy only so far",
+                            "Need follow-up before audit review",
+                        )
+                    ),
+                }
+            )
+            remaining_extra_tools -= 1
+
+        for _ in range(remaining_extra_tools):
             tool = self._choose_extra_tool(summary)
             action: dict[str, Any] = {"tool": tool}
-            if tool not in {"hidden_reconciliation_tab"}:
+            if tool in _TRACKER_TOOLS:
+                action["sheet"] = pbc_tracker_layout.TRACKER_SHEET_NAME
+            elif tool not in {"hidden_reconciliation_tab"}:
                 action["sheet"] = self.rng.choice(visible_sheet_names)
             if tool in {"formula_errors", "stringified_numbers"}:
                 action["count"] = self.rng.randint(1, 3)
@@ -226,6 +249,16 @@ class UnreproducibleNightmareAgent:
         ]
         if hidden_sheet_count == 0:
             tools.extend(["hidden_reconciliation_tab", "hidden_reconciliation_tab"])
+        if pbc_tracker_layout.TRACKER_SHEET_NAME in summary.get("visible_sheet_names", ()):
+            tools.extend(
+                [
+                    "add_visible_tracker_comment",
+                    "apply_tracker_status_variant",
+                    "apply_tracker_deadline_noise",
+                    "highlight_tracker_update_row",
+                    "apply_tracker_follow_up_noise",
+                ]
+            )
         return self.rng.choice(tools)
 
 
@@ -236,9 +269,21 @@ _SHEET_TOOLS = {
     "hide_rows_columns",
     "secondary_table",
     "old_version_tab",
+    "add_visible_tracker_comment",
+    "apply_tracker_status_variant",
+    "apply_tracker_deadline_noise",
+    "highlight_tracker_update_row",
+    "apply_tracker_follow_up_noise",
 }
 _WORKBOOK_TOOLS = {"hidden_reconciliation_tab"}
 _ALL_TOOLS = _SHEET_TOOLS | _WORKBOOK_TOOLS
+_TRACKER_TOOLS = {
+    "add_visible_tracker_comment",
+    "apply_tracker_status_variant",
+    "apply_tracker_deadline_noise",
+    "highlight_tracker_update_row",
+    "apply_tracker_follow_up_noise",
+}
 
 
 def _planner_prompt(
@@ -262,11 +307,13 @@ def _planner_prompt(
                 "required_human_residue_notation_count": notation_count,
                 "target_extra_tool_count": extra_tool_count,
                 "available_sheet_names": summary.get("visible_sheet_names", []),
-                "notes": [
-                    "Use only available sheet names.",
-                    "Prefer believable audit-season mess, not file corruption.",
-                    "Do not request direct accounting truth changes.",
-                    "Keep counts small and plausible.",
+                    "notes": [
+                        "Use only available sheet names.",
+                        "Use tracker tools only on the PBC Request List sheet.",
+                        "For tracker tools, row_key can be a visible request id such as A.7.",
+                        "Prefer believable audit-season mess, not file corruption.",
+                        "Do not request direct accounting truth changes.",
+                        "Keep counts small and plausible.",
                 ],
             },
             "workbook_summary": summary,
@@ -281,6 +328,13 @@ def _planner_prompt(
                             "old support in email, do not delete",
                         ],
                         "reason": "Staff reminder notes are sparse on this sheet.",
+                    },
+                    {
+                        "tool": "add_visible_tracker_comment",
+                        "sheet": "PBC Request List",
+                        "row_key": "A.7",
+                        "text": "Not provided, remind finance",
+                        "reason": "Tracker row needs a visible follow-up note.",
                     }
                 ]
             },
@@ -309,6 +363,10 @@ def _plan_response_schema() -> dict[str, Any]:
                             "items": {"type": "string"},
                             "maxItems": 20,
                         },
+                        "row_key": {"type": "string"},
+                        "text": {"type": "string"},
+                        "status": {"type": "string"},
+                        "style": {"type": "string"},
                         "reason": {"type": "string"},
                     },
                     "required": ["tool"],
@@ -383,7 +441,11 @@ def _sanitize_plan(
         action: dict[str, Any] = {"tool": tool}
         if tool in _SHEET_TOOLS:
             sheet_name = str(raw_action.get("sheet", "")).strip()
-            if sheet_name not in visible_sheet_names:
+            if tool in _TRACKER_TOOLS:
+                if pbc_tracker_layout.TRACKER_SHEET_NAME not in visible_sheet_names:
+                    continue
+                sheet_name = pbc_tracker_layout.TRACKER_SHEET_NAME
+            elif sheet_name not in visible_sheet_names:
                 sheet_name = visible_sheet_names[sheet_index % len(visible_sheet_names)]
                 sheet_index += 1
             action["sheet"] = sheet_name
@@ -401,6 +463,19 @@ def _sanitize_plan(
                 ]
                 if cleaned_texts:
                     action["texts"] = tuple(cleaned_texts[:count])
+        elif tool in _TRACKER_TOOLS:
+            if extra_total >= extra_tool_count:
+                continue
+            for key, max_length in (
+                ("row_key", 24),
+                ("text", 120),
+                ("status", 48),
+                ("style", 48),
+            ):
+                value = raw_action.get(key)
+                if isinstance(value, str) and value.strip():
+                    action[key] = value.strip()[:max_length]
+            extra_total += 1
         elif tool == "hide_rows_columns":
             if extra_total >= extra_tool_count:
                 continue
@@ -430,16 +505,21 @@ def _sanitize_plan(
         sanitized.append({"tool": "human_residue_notation", "sheet": sheet_name, "count": count})
         notation_total += count
 
-    filler_tools = ("formula_errors", "stringified_numbers", "hide_rows_columns", "secondary_table")
+    filler_tools = ["formula_errors", "stringified_numbers", "hide_rows_columns", "secondary_table"]
+    if pbc_tracker_layout.TRACKER_SHEET_NAME in visible_sheet_names:
+        filler_tools.extend(["add_visible_tracker_comment", "apply_tracker_follow_up_noise"])
     while extra_total < extra_tool_count:
         tool = filler_tools[extra_total % len(filler_tools)]
-        sheet_name = visible_sheet_names[sheet_index % len(visible_sheet_names)]
-        sheet_index += 1
+        if tool in _TRACKER_TOOLS:
+            sheet_name = pbc_tracker_layout.TRACKER_SHEET_NAME
+        else:
+            sheet_name = visible_sheet_names[sheet_index % len(visible_sheet_names)]
+            sheet_index += 1
         action = {"tool": tool, "sheet": sheet_name}
         if tool == "hide_rows_columns":
             action["row_count"] = 1
             action["column_count"] = 0
-        else:
+        elif tool not in _TRACKER_TOOLS:
             action["count"] = 1
         sanitized.append(action)
         extra_total += 1
@@ -526,6 +606,15 @@ def _apply_action(
     if sheet_name not in allowed_sheet_names or sheet_name not in workbook.sheetnames:
         return None
     worksheet = workbook[sheet_name]
+
+    if tool in _TRACKER_TOOLS:
+        return pbc_tracker_layout.apply_tracker_agent_action(
+            worksheet=worksheet,
+            action=action,
+            logger=logger,
+            rng=rng,
+        )
+
     table = workbook_mutations.find_used_range(worksheet)
     if table is None:
         return None

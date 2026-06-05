@@ -14,6 +14,7 @@ from typing import Any, Mapping
 from openpyxl import Workbook
 from openpyxl.worksheet.worksheet import Worksheet
 
+from pbc_chaos.workbook import pbc_tracker_layout
 from pbc_chaos.workbook import comments, formatting, workbook_mutations
 
 
@@ -53,6 +54,12 @@ class LayoutChaosConfig:
     add_old_version_tabs: bool = True
     old_version_tab_count: int = 1
     add_hidden_reconciliation_tabs: bool = True
+    pbc_request_list_layout: bool = False
+    tracker_status_noise: bool = False
+    tracker_deadline_noise: bool = False
+    tracker_visible_comments: bool = False
+    tracker_update_highlights: bool = False
+    tracker_instruction_blocks: bool = False
 
 
 def coerce_config(config: LayoutChaosConfig | Mapping[str, Any] | None) -> LayoutChaosConfig:
@@ -98,6 +105,15 @@ def apply_layout_chaos(
     table = workbook_mutations.find_used_range(worksheet)
     if table is None:
         raise ValueError("Cannot apply layout chaos to an empty worksheet.")
+
+    if resolved.pbc_request_list_layout and pbc_tracker_layout.is_tracker_sheet(worksheet):
+        return pbc_tracker_layout.apply_tracker_layout_chaos(
+            workbook=workbook,
+            worksheet=worksheet,
+            config=resolved,
+            rng=rng,
+            metadata_logger=metadata_logger,
+        )
 
     table = workbook_mutations.shift_table_away_from_a1(
         worksheet,
