@@ -22,6 +22,7 @@ dev = [
 
 [project.scripts]
 pbc-chaos = "pbc_chaos.cli:app"
+pbc-chaos-web = "pbc_chaos.web.app:main"
 
 [build-system]
 requires = ["setuptools>=69", "wheel"]
