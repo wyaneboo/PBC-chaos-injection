@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import json
 import os
 from random import SystemRandom
-from typing import Any, TYPE_CHECKING, TypedDict
+from typing import Any, Callable, TYPE_CHECKING, TypedDict
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import warnings
@@ -40,6 +40,9 @@ class NightmareAgentResult:
     provider: str
     plan: tuple[dict[str, Any], ...]
     error: str | None = None
+
+
+NightmareProgressCallback = Callable[[dict[str, Any]], None]
 
 
 class UnreproducibleNightmareAgent:
@@ -548,16 +551,34 @@ def apply_unreproducible_nightmare_mode(
     workbook: Workbook,
     logger: GroundTruthLogger,
     config: UnreproducibleNightmareModeConfig,
+    progress_callback: NightmareProgressCallback | None = None,
 ) -> NightmareAgentResult:
     """Run the optional non-deterministic nightmare post-pass."""
 
     agent = UnreproducibleNightmareAgent(config)
+    _notify_progress(
+        progress_callback,
+        phase="reviewing",
+        message="Reviewing workbook structure and sheet metadata",
+        agent_provider="pending",
+        planned_actions=(),
+        applied_actions=(),
+    )
     result = agent.plan(workbook, allowed_sheet_names=logger.sheet_names())
     rng = agent.rng
     allowed_sheet_names = logger.sheet_names()
 
     applied_actions = []
-    for action in result.plan:
+    _notify_progress(
+        progress_callback,
+        phase="planned",
+        message=f"Selected {len(result.plan)} spreadsheet change(s)",
+        agent_provider=result.provider,
+        agent_error=result.error,
+        planned_actions=result.plan,
+        applied_actions=tuple(applied_actions),
+    )
+    for action_index, action in enumerate(result.plan, start=1):
         applied = _apply_action(
             workbook=workbook,
             logger=logger,
@@ -568,6 +589,18 @@ def apply_unreproducible_nightmare_mode(
         )
         if applied:
             applied_actions.append(applied)
+            _notify_progress(
+                progress_callback,
+                phase="applied",
+                message=_action_message(applied, action_index=action_index, action_total=len(result.plan)),
+                agent_provider=result.provider,
+                agent_error=result.error,
+                planned_actions=result.plan,
+                applied_actions=tuple(applied_actions),
+                current_action=applied,
+                action_index=action_index,
+                action_total=len(result.plan),
+            )
 
     logger.record_workbook_artifact(
         artifact_type="unreproducible_nightmare_plan",
@@ -578,7 +611,55 @@ def apply_unreproducible_nightmare_mode(
             "applied_actions": tuple(applied_actions),
         },
     )
+    _notify_progress(
+        progress_callback,
+        phase="complete",
+        message=f"Completed {len(applied_actions)} spreadsheet change(s)",
+        agent_provider=result.provider,
+        agent_error=result.error,
+        planned_actions=result.plan,
+        applied_actions=tuple(applied_actions),
+    )
     return result
+
+
+def _notify_progress(
+    callback: NightmareProgressCallback | None,
+    *,
+    phase: str,
+    message: str,
+    agent_provider: str,
+    planned_actions: tuple[dict[str, Any], ...],
+    applied_actions: tuple[dict[str, Any], ...],
+    agent_error: str | None = None,
+    current_action: dict[str, Any] | None = None,
+    action_index: int | None = None,
+    action_total: int | None = None,
+) -> None:
+    if callback is None:
+        return
+    callback(
+        {
+            "phase": phase,
+            "message": message,
+            "agent_provider": agent_provider,
+            "agent_error": agent_error,
+            "planned_actions": planned_actions,
+            "applied_actions": applied_actions,
+            "planned_action_count": len(planned_actions),
+            "applied_action_count": len(applied_actions),
+            "current_action": current_action,
+            "action_index": action_index,
+            "action_total": action_total,
+        }
+    )
+
+
+def _action_message(action: dict[str, Any], *, action_index: int, action_total: int) -> str:
+    tool = str(action.get("tool") or "agent action").replace("_", " ")
+    sheet = action.get("sheet") or action.get("source_sheet") or action.get("sheet_name")
+    target = f" on {sheet}" if sheet else ""
+    return f"Applied {action_index}/{action_total}: {tool}{target}"
 
 
 def _apply_action(

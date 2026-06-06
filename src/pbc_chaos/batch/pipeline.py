@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 from random import Random
-from typing import Any, Iterable
+from typing import Any, Callable, Iterable
 
 from openpyxl import load_workbook
 
@@ -152,6 +152,7 @@ def generate_single_workbook(
     company_id: str | None = None,
     filename_stem: str | None = None,
     unreproducible_nightmare_mode: bool = False,
+    nightmare_progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> BatchGenerationResult:
     """Generate one workbook, sidecar JSON, and a one-row manifest."""
 
@@ -175,6 +176,7 @@ def generate_single_workbook(
         output_dir=output_dir,
         seed=seed,
         filename_stem=filename_stem,
+        nightmare_progress_callback=nightmare_progress_callback,
     )
     record = GeneratedWorkbookRecord(
         company=company,
@@ -469,6 +471,7 @@ def _export_one(
     output_dir: str | Path,
     seed: int | None,
     filename_stem: str | None,
+    nightmare_progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> ExportedGroundTruthWorkbook:
     return export_pbc_workbook(
         company,
@@ -477,6 +480,7 @@ def _export_one(
         config=config,
         seed=seed,
         filename_stem=filename_stem,
+        nightmare_progress_callback=nightmare_progress_callback,
     )
 
 

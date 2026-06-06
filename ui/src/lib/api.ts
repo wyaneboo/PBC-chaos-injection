@@ -34,6 +34,30 @@ export interface RunEvent {
     stage_percent: number;
   } | null;
   artifact?: Artifact | null;
+  details?: AgentEventDetails | null;
+}
+
+export interface AgentAction {
+  tool?: string;
+  sheet?: string;
+  count?: number;
+  row_count?: number;
+  column_count?: number;
+  cells?: string[];
+  row?: number;
+  request_id?: string;
+  text?: string;
+  reason?: string;
+  [key: string]: unknown;
+}
+
+export interface AgentEventDetails {
+  agent_provider?: string;
+  agent_error?: string | null;
+  planned_actions?: AgentAction[];
+  applied_actions?: AgentAction[];
+  planned_action_count?: number;
+  applied_action_count?: number;
 }
 
 export interface Artifact {
@@ -83,4 +107,3 @@ export async function fetchRun(runId: string): Promise<RunSnapshot> {
   }
   return payload;
 }
-

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
+from typing import Any, Callable, Mapping
 
 from openpyxl import Workbook
 from openpyxl.utils.dataframe import dataframe_to_rows
@@ -60,6 +60,7 @@ def generate_pbc_workbook(
     *,
     config: ChaosWorkbookConfig | Mapping[str, object] | str | Path | None = None,
     seed: int | None = None,
+    nightmare_progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> Workbook:
     """Generate one workbook using the configured Phase 7 chaos severity."""
 
@@ -68,6 +69,7 @@ def generate_pbc_workbook(
         period,
         config=config,
         seed=seed,
+        nightmare_progress_callback=nightmare_progress_callback,
     ).workbook
 
 
@@ -77,6 +79,7 @@ def generate_pbc_workbook_with_ground_truth(
     *,
     config: ChaosWorkbookConfig | Mapping[str, object] | str | Path | None = None,
     seed: int | None = None,
+    nightmare_progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> GeneratedPBCWorkbook:
     """Generate a workbook and matching machine-readable ground truth."""
 
@@ -119,6 +122,7 @@ def generate_pbc_workbook_with_ground_truth(
             workbook=workbook,
             logger=logger,
             config=resolved.unreproducible_nightmare_mode,
+            progress_callback=nightmare_progress_callback,
         )
     logger.record_discrepancies(context.discrepancy_metadata)
     return GeneratedPBCWorkbook(

@@ -79,7 +79,7 @@ unreproducible_nightmare_mode:
   use_llm_planner: true
   llm_model: gemma-4-31b-it
   gemini_api_key_env: GEMINI_API_KEY
-  llm_timeout_seconds: 20
+  llm_timeout_seconds: 180
   notation_count: 30
   extra_tool_count: 5
   max_notation_length: 96

@@ -126,6 +126,38 @@ def test_unreproducible_nightmare_mode_adds_ai_notations_and_plan_metadata():
     )
 
 
+def test_unreproducible_nightmare_mode_streams_plan_and_applied_actions():
+    company, period = company_and_period()
+    config = config_from_mapping(
+        {
+            "severity": 1,
+            "unreproducible_nightmare_mode": {
+                "enabled": True,
+                "use_llm_planner": False,
+                "notation_count": 2,
+                "extra_tool_count": 0,
+            },
+        }
+    )
+    events = []
+
+    generate_pbc_workbook_with_ground_truth(
+        company,
+        period,
+        config=config,
+        seed=42,
+        nightmare_progress_callback=events.append,
+    )
+
+    phases = [event["phase"] for event in events]
+    assert phases[0] == "reviewing"
+    assert "planned" in phases
+    assert "applied" in phases
+    assert phases[-1] == "complete"
+    assert events[-1]["planned_action_count"] >= 1
+    assert events[-1]["applied_action_count"] >= 1
+
+
 def test_unreproducible_nightmare_mode_changes_identity_for_same_seed():
     company, period = company_and_period()
     config = config_from_mapping(

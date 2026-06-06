@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -135,20 +136,39 @@ def _run_generation(
                 command_preview,
                 "nightmare_post_pass",
                 "running",
-                "Applying unreproducible nightmare post-pass",
+                "Nightmare agent reviewing workbook after layout chaos",
                 workbook_base + 0.88 * (per_workbook_span / total),
                 workbook=dict(workbook, stage_percent=0.88),
+                details={
+                    "phase": "reviewing",
+                    "agent_provider": "pending",
+                    "planned_actions": [],
+                    "applied_actions": [],
+                    "planned_action_count": 0,
+                    "applied_action_count": 0,
+                },
             )
-        else:
-            _emit(
-                emit,
-                command_preview,
-                "nightmare_post_pass",
-                "skipped",
-                "Nightmare mode is off",
-                workbook_base + 0.88 * (per_workbook_span / total),
-                workbook=dict(workbook, stage_percent=0.88),
-            )
+
+        nightmare_progress_callback = None
+        nightmare_streamed_final = False
+        if nightmare:
+            def nightmare_progress_callback(progress: dict[str, Any]) -> None:
+                nonlocal nightmare_streamed_final
+                details = _nightmare_progress_details(progress)
+                phase = str(progress.get("phase") or "")
+                if phase == "complete":
+                    nightmare_streamed_final = True
+                _emit(
+                    emit,
+                    command_preview,
+                    "nightmare_post_pass",
+                    "succeeded" if phase == "complete" else "running",
+                    _nightmare_progress_message(progress),
+                    workbook_base + 0.9 * (per_workbook_span / total),
+                    workbook=dict(workbook, stage_percent=0.9),
+                    details=details,
+                    severity="warning" if details.get("agent_error") else "info",
+                )
 
         result = generate_single_workbook(
             company_name=company.company_name,
@@ -159,6 +179,7 @@ def _run_generation(
             company_id=company.company_id,
             filename_stem=generation_plan["filename_stems"][index - 1],
             unreproducible_nightmare_mode=nightmare,
+            nightmare_progress_callback=nightmare_progress_callback,
         )
         record = result.records[0]
         records.append(record)
@@ -178,6 +199,36 @@ def _run_generation(
                 workbook_base + local_percent * (per_workbook_span / total),
                 workbook=dict(workbook, stage_percent=local_percent),
             )
+        if nightmare and not nightmare_streamed_final:
+            nightmare_details = _nightmare_agent_details(record.exported.ground_truth_path)
+            if nightmare_details:
+                _emit(
+                    emit,
+                    command_preview,
+                    "nightmare_post_pass",
+                    "succeeded",
+                    _nightmare_message(nightmare_details),
+                    workbook_base + 0.9 * (per_workbook_span / total),
+                    workbook=dict(workbook, stage_percent=0.9),
+                    details=nightmare_details,
+                    severity="warning" if nightmare_details.get("agent_error") else "info",
+                )
+            else:
+                _emit(
+                    emit,
+                    command_preview,
+                    "nightmare_post_pass",
+                    "warning",
+                    "Nightmare mode was enabled, but no agent changes were recorded",
+                    workbook_base + 0.9 * (per_workbook_span / total),
+                    workbook=dict(workbook, stage_percent=0.9),
+                    details={
+                        "agent_provider": "not_recorded",
+                        "planned_action_count": 0,
+                        "applied_action_count": 0,
+                    },
+                    severity="warning",
+                )
         for artifact_type, artifact_path in (
             ("workbook", record.exported.workbook_path),
             ("groundtruth", record.exported.ground_truth_path),
@@ -412,6 +463,7 @@ def _emit(
     *,
     workbook: dict[str, Any] | None = None,
     artifact: dict[str, Any] | None = None,
+    details: dict[str, Any] | None = None,
     severity: str = "info",
 ) -> None:
     emit(
@@ -424,6 +476,7 @@ def _emit(
             "overall_percent": max(0, min(100, round(overall_percent, 1))),
             "workbook": workbook,
             "artifact": artifact,
+            "details": details,
             "severity": severity,
             "timestamp": now_iso(),
         }
@@ -448,6 +501,82 @@ def _artifact(artifact_type: str, path: Path) -> dict[str, Any]:
         "name": path.name,
         "size": path.stat().st_size if path.exists() else None,
     }
+
+
+def _nightmare_agent_details(ground_truth_path: Path) -> dict[str, Any] | None:
+    try:
+        payload = json.loads(ground_truth_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    intentional_errors = payload.get("intentional_errors")
+    if not isinstance(intentional_errors, list):
+        return None
+
+    for item in intentional_errors:
+        if not isinstance(item, dict) or item.get("type") != "unreproducible_nightmare_plan":
+            continue
+        planned_actions = _compact_actions(item.get("planned_actions"))
+        applied_actions = _compact_actions(item.get("applied_actions"))
+        return {
+            "phase": "complete",
+            "agent_provider": str(item.get("agent_provider") or "unknown"),
+            "agent_error": item.get("agent_error") if item.get("agent_error") else None,
+            "planned_actions": planned_actions,
+            "applied_actions": applied_actions,
+            "planned_action_count": len(item.get("planned_actions") or ()),
+            "applied_action_count": len(item.get("applied_actions") or ()),
+        }
+    return None
+
+
+def _nightmare_progress_details(progress: dict[str, Any]) -> dict[str, Any]:
+    planned_actions = _compact_actions(progress.get("planned_actions"))
+    applied_actions = _compact_actions(progress.get("applied_actions"))
+    current_action = progress.get("current_action")
+    return {
+        "phase": str(progress.get("phase") or "running"),
+        "agent_provider": str(progress.get("agent_provider") or "pending"),
+        "agent_error": progress.get("agent_error") if progress.get("agent_error") else None,
+        "planned_actions": planned_actions,
+        "applied_actions": applied_actions,
+        "planned_action_count": int(progress.get("planned_action_count") or len(planned_actions)),
+        "applied_action_count": int(progress.get("applied_action_count") or len(applied_actions)),
+        "current_action": current_action if isinstance(current_action, dict) else None,
+        "action_index": progress.get("action_index"),
+        "action_total": progress.get("action_total"),
+    }
+
+
+def _compact_actions(value: Any, *, limit: int = 30) -> list[dict[str, Any]]:
+    if not isinstance(value, list | tuple):
+        return []
+    return [item for item in value[:limit] if isinstance(item, dict)]
+
+
+def _nightmare_progress_message(progress: dict[str, Any]) -> str:
+    phase = str(progress.get("phase") or "")
+    message = str(progress.get("message") or "")
+    if phase == "planned":
+        provider = str(progress.get("agent_provider") or "")
+        planned_count = int(progress.get("planned_action_count") or 0)
+        if provider == "langgraph_gemini_generate_content":
+            return f"Gemini selected {planned_count} spreadsheet change(s)"
+        if progress.get("agent_error"):
+            return f"Heuristic fallback selected {planned_count} change(s) after Gemini planner issue"
+    if phase == "complete":
+        return _nightmare_message(_nightmare_progress_details(progress))
+    return message or "Nightmare agent is working"
+
+
+def _nightmare_message(details: dict[str, Any]) -> str:
+    provider = str(details.get("agent_provider") or "")
+    applied_count = int(details.get("applied_action_count") or 0)
+    if provider == "langgraph_gemini_generate_content":
+        return f"Gemini agent applied {applied_count} spreadsheet change(s)"
+    if details.get("agent_error"):
+        return f"Heuristic fallback applied {applied_count} change(s) after Gemini planner issue"
+    return f"Nightmare agent applied {applied_count} spreadsheet change(s)"
 
 
 def _gemini_configured() -> bool:

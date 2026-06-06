@@ -89,7 +89,7 @@ GENERATION_STAGES: tuple[dict[str, Any], ...] = (
     },
     {
         "id": "nightmare_post_pass",
-        "label": "Apply nightmare post-pass",
+        "label": "Nightmare agent pass",
         "weight": 10,
         "notes": "Run only when unreproducible nightmare mode is enabled",
     },
@@ -138,4 +138,3 @@ def generation_stage_index() -> dict[str, dict[str, Any]]:
     """Return generation stages keyed by stable ID."""
 
     return {stage["id"]: stage for stage in GENERATION_STAGES}
-

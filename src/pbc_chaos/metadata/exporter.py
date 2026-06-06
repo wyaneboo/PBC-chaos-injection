@@ -6,6 +6,7 @@ import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, Callable
 
 from openpyxl import Workbook
 
@@ -30,6 +31,7 @@ def export_pbc_workbook(
     config: ChaosWorkbookConfig | str | Path | None = None,
     seed: int | None = None,
     filename_stem: str | None = None,
+    nightmare_progress_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> ExportedGroundTruthWorkbook:
     """Generate and save a workbook plus its `.groundtruth.json` sidecar."""
 
@@ -41,6 +43,7 @@ def export_pbc_workbook(
         period,
         config=resolved_config,
         seed=seed,
+        nightmare_progress_callback=nightmare_progress_callback,
     )
     return export_generated_workbook(
         generated.workbook,

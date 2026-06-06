@@ -10,7 +10,7 @@ export const generationStages: StageDefinition[] = [
   { id: "generate_documents", label: "Generate clean documents" },
   { id: "render_workbook", label: "Render workbook sheets" },
   { id: "apply_layout_chaos", label: "Apply layout chaos" },
-  { id: "nightmare_post_pass", label: "Apply nightmare post-pass" },
+  { id: "nightmare_post_pass", label: "Nightmare agent pass" },
   { id: "record_ground_truth", label: "Record ground truth" },
   { id: "save_artifacts", label: "Save artifacts" },
   { id: "write_manifest", label: "Write manifest" },
@@ -58,4 +58,3 @@ export function lastEventByStage(events: RunEvent[]): Map<string, RunEvent> {
 export function latestEvent(events: RunEvent[]): RunEvent | undefined {
   return events.at(-1);
 }
-

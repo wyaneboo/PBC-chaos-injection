@@ -79,7 +79,7 @@ class UnreproducibleNightmareModeConfig:
     use_llm_planner: bool = True
     llm_model: str = "gemma-4-31b-it"
     gemini_api_key_env: str = "GEMINI_API_KEY"
-    llm_timeout_seconds: int = 20
+    llm_timeout_seconds: int = 180
     notation_count: int = 24
     extra_tool_count: int = 4
     max_notation_length: int = 96
