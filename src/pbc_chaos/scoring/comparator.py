@@ -160,6 +160,9 @@ def _score_sheet(
 ) -> DocumentScore:
     expected_type = str(sheet.get("document_type", ""))
     expected_schema = tuple(str(field) for field in sheet.get("clean_canonical_schema", ()))
+    visible_table_schema = _visible_table_schema(sheet, expected_schema)
+    visible_headers = _visible_column_headers(sheet, visible_table_schema)
+    renamed_headers = _renamed_column_headers(sheet, visible_table_schema, visible_headers)
     expected_rows = tuple(_dict_rows(sheet.get("expected_extraction_output", ())))
     issues: list[str] = []
 
@@ -172,20 +175,24 @@ def _score_sheet(
             matched_document_type=None,
             metrics=_zero_document_metrics(
                 expected_rows=expected_rows,
-                expected_schema=expected_schema,
+                expected_schema=visible_table_schema,
             ),
             issues=tuple(issues),
         )
 
     actual_headers = _document_headers(extraction)
     column_mapping, column_details = _build_column_mapping(
-        expected_schema,
+        visible_table_schema,
         actual_headers,
         extraction.column_mapping,
         config=config,
+        groundtruth_mapping=_groundtruth_column_mapping(sheet, expected_schema),
     )
     canonical_rows = tuple(
-        _canonicalize_row(row, column_mapping, expected_schema)
+        _apply_context_fields(
+            _canonicalize_row(row, column_mapping, expected_schema),
+            sheet,
+        )
         for row in extraction.rows
     )
     row_matches = _match_rows(expected_rows, canonical_rows, expected_type)
@@ -200,11 +207,12 @@ def _score_sheet(
             extraction.table_location,
         ),
         "header_detection_accuracy": _score_headers(
-            expected_schema,
+            visible_headers,
             actual_headers,
             _table_location(sheet),
             extraction.table_location,
             config=config,
+            alternate_expected_headers=(renamed_headers, visible_table_schema, expected_schema),
         ),
         "column_mapping_accuracy": MetricResult(
             name="column_mapping_accuracy",
@@ -353,41 +361,71 @@ def _score_headers(
     actual_location: dict[str, Any],
     *,
     config: ScoringConfig,
+    alternate_expected_headers: tuple[tuple[str, ...], ...] = (),
 ) -> MetricResult:
-    exact_header_set = {
-        normalize_field_name(header)
-        for header in expected_headers
-    } == {
-        normalize_field_name(header)
-        for header in actual_headers
-    }
-    matches = best_fuzzy_matches(
-        expected_headers,
-        actual_headers,
-        threshold=config.fuzzy_column_threshold,
-    )
-    prf = precision_recall_f1(
-        len(matches),
-        max(0, len(actual_headers) - len(matches)),
-        max(0, len(expected_headers) - len(matches)),
-    )
     header_row_available = "header_row" in actual_location
     header_row_exact = _int_or_none(expected_location.get("header_row")) == _int_or_none(
         actual_location.get("header_row")
     )
-    score = prf.f1
-    if header_row_available:
-        score = (score + (1.0 if header_row_exact else 0.0)) / 2
-    return MetricResult(
-        name="header_detection_accuracy",
-        score=bounded_score(score),
-        details={
+    candidates = (expected_headers,) + alternate_expected_headers
+    best = None
+    for index, candidate in enumerate(candidates):
+        exact_header_set = {
+            normalize_field_name(header)
+            for header in candidate
+        } == {
+            normalize_field_name(header)
+            for header in actual_headers
+        }
+        matches = best_fuzzy_matches(
+            candidate,
+            actual_headers,
+            threshold=config.fuzzy_column_threshold,
+        )
+        prf = precision_recall_f1(
+            len(matches),
+            max(0, len(actual_headers) - len(matches)),
+            max(0, len(candidate) - len(matches)),
+        )
+        score = prf.f1
+        if header_row_available:
+            score = (score + (1.0 if header_row_exact else 0.0)) / 2
+        scored = {
+            "score": bounded_score(score),
             "exact_match": exact_header_set,
             "precision": prf.precision,
             "recall": prf.recall,
             "f1": prf.f1,
+            "matches": matches,
+            "expected_headers": candidate,
+            "variant": "visible" if index == 0 else f"alternate_{index}",
+        }
+        if best is None or scored["score"] > best["score"]:
+            best = scored
+
+    if best is None:
+        best = {
+            "score": 0.0,
+            "exact_match": False,
+            "precision": 0.0,
+            "recall": 0.0,
+            "f1": 0.0,
+            "matches": (),
+            "expected_headers": expected_headers,
+            "variant": "visible",
+        }
+    return MetricResult(
+        name="header_detection_accuracy",
+        score=float(best["score"]),
+        details={
+            "exact_match": best["exact_match"],
+            "precision": best["precision"],
+            "recall": best["recall"],
+            "f1": best["f1"],
             "header_row_exact": header_row_exact if header_row_available else None,
-            "fuzzy_matches": [match.as_dict() for match in matches],
+            "matched_expected_variant": best["variant"],
+            "expected_headers": list(best["expected_headers"]),
+            "fuzzy_matches": [match.as_dict() for match in best["matches"]],
         },
     )
 
@@ -718,6 +756,7 @@ def _build_column_mapping(
     raw_mapping: dict[str, str],
     *,
     config: ScoringConfig,
+    groundtruth_mapping: dict[str, str] | None = None,
 ) -> tuple[dict[str, str], dict[str, Any]]:
     expected_lookup = {normalize_field_name(field): field for field in expected_schema}
     actual_to_expected: dict[str, str] = {}
@@ -736,6 +775,23 @@ def _build_column_mapping(
             explicit_matches.append({"actual": value, "expected": key_expected})
 
     unmapped_headers = [header for header in actual_headers if header not in actual_to_expected]
+    groundtruth_matches = []
+    if groundtruth_mapping:
+        normalized_groundtruth_mapping = {
+            normalize_field_name(actual): expected
+            for actual, expected in groundtruth_mapping.items()
+            if expected in expected_schema
+        }
+        for header in tuple(unmapped_headers):
+            expected = (
+                groundtruth_mapping.get(header)
+                or normalized_groundtruth_mapping.get(normalize_field_name(header))
+            )
+            if expected in expected_schema:
+                actual_to_expected[header] = expected
+                groundtruth_matches.append({"actual": header, "expected": expected})
+                unmapped_headers.remove(header)
+
     exact_matches = []
     for header in tuple(unmapped_headers):
         expected = expected_lookup.get(normalize_field_name(header))
@@ -760,7 +816,9 @@ def _build_column_mapping(
         "mapped_count": len(mapped_expected),
         "exact_match_count": len(exact_matches),
         "explicit_match_count": len(explicit_matches),
+        "groundtruth_match_count": len(groundtruth_matches),
         "fuzzy_match_count": len(fuzzy_matches),
+        "groundtruth_column_match": groundtruth_matches,
         "fuzzy_column_match": [match.as_dict() for match in fuzzy_matches],
         "unmapped_expected_columns": [
             field for field in expected_schema if field not in mapped_expected
@@ -790,6 +848,19 @@ def _canonicalize_row(
         if expected:
             canonical[expected] = value
     return canonical
+
+
+def _apply_context_fields(row: dict[str, Any], sheet: dict[str, Any]) -> dict[str, Any]:
+    """Fill canonical fields represented outside the visible table."""
+
+    context_values = sheet.get("context_field_values")
+    if not isinstance(context_values, dict):
+        return row
+    output = dict(row)
+    for field, value in context_values.items():
+        if field not in output or output.get(field) in (None, ""):
+            output[str(field)] = value
+    return output
 
 
 def _match_rows(
@@ -1074,6 +1145,103 @@ def _document_headers(extraction: NormalizedExtractionDocument) -> tuple[str, ..
     for row in extraction.rows[:1]:
         headers.extend(key for key in row if key not in headers)
     return tuple(dict.fromkeys(str(header) for header in headers if str(header)))
+
+
+def _visible_table_schema(
+    sheet: dict[str, Any],
+    expected_schema: tuple[str, ...],
+) -> tuple[str, ...]:
+    raw = sheet.get("visible_table_schema")
+    if isinstance(raw, list | tuple):
+        fields = tuple(str(field) for field in raw if str(field))
+        if fields:
+            return fields
+    return expected_schema
+
+
+def _visible_column_headers(
+    sheet: dict[str, Any],
+    visible_table_schema: tuple[str, ...],
+) -> tuple[str, ...]:
+    raw = sheet.get("visible_column_headers")
+    if isinstance(raw, list | tuple):
+        headers = tuple(str(header) for header in raw if str(header))
+        if headers:
+            return headers
+
+    canonical_to_visible = sheet.get("canonical_to_visible_columns")
+    if isinstance(canonical_to_visible, dict) and canonical_to_visible:
+        return tuple(
+            str(canonical_to_visible.get(field) or field)
+            for field in visible_table_schema
+        )
+    return visible_table_schema
+
+
+def _renamed_column_headers(
+    sheet: dict[str, Any],
+    visible_table_schema: tuple[str, ...],
+    visible_headers: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Return final known headers after layout-level rename mutations."""
+
+    renamed = sheet.get("renamed_columns_mapping")
+    if not isinstance(renamed, dict) or not renamed:
+        return visible_headers
+    canonical_to_visible = sheet.get("canonical_to_visible_columns")
+    if not isinstance(canonical_to_visible, dict):
+        canonical_to_visible = {}
+
+    output = []
+    for index, field in enumerate(visible_table_schema):
+        visible = (
+            str(canonical_to_visible.get(field))
+            if field in canonical_to_visible
+            else visible_headers[index] if index < len(visible_headers) else field
+        )
+        output.append(str(renamed.get(visible) or renamed.get(field) or visible))
+    return tuple(output)
+
+
+def _groundtruth_column_mapping(
+    sheet: dict[str, Any],
+    expected_schema: tuple[str, ...],
+) -> dict[str, str]:
+    """Return actual/visible header aliases known from simulator ground truth."""
+
+    expected = set(expected_schema)
+    mapping: dict[str, str] = {}
+    visible_mapping = sheet.get("visible_columns_mapping")
+    if isinstance(visible_mapping, dict):
+        for actual, canonical in visible_mapping.items():
+            canonical_text = str(canonical)
+            if canonical_text in expected:
+                mapping[str(actual)] = canonical_text
+
+    canonical_to_visible = sheet.get("canonical_to_visible_columns")
+    if isinstance(canonical_to_visible, dict):
+        for canonical, visible in canonical_to_visible.items():
+            canonical_text = str(canonical)
+            if canonical_text in expected:
+                mapping[str(visible)] = canonical_text
+
+    renamed = sheet.get("renamed_columns_mapping")
+    if isinstance(renamed, dict):
+        for raw_original, raw_renamed in renamed.items():
+            original = str(raw_original)
+            renamed_header = str(raw_renamed)
+            canonical = None
+            if original in expected:
+                canonical = original
+            elif original in mapping:
+                canonical = mapping[original]
+            elif renamed_header in expected:
+                canonical = renamed_header
+                mapping[original] = canonical
+            if canonical:
+                mapping[original] = canonical
+                mapping[renamed_header] = canonical
+    return mapping
 
 
 def _groundtruth_sheets(groundtruth: dict[str, Any]) -> tuple[dict[str, Any], ...]:

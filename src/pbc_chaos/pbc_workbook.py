@@ -30,6 +30,7 @@ from pbc_chaos.reconciliation import (
     generate_trial_balance,
 )
 from pbc_chaos.workbook import layout_engine
+from pbc_chaos.workbook.visible_schema import build_visible_export
 
 
 SHEET_NAMES = {
@@ -92,14 +93,27 @@ def generate_pbc_workbook_with_ground_truth(
     for index, document in enumerate(documents, start=1):
         sheet_name = SHEET_NAMES[document.document_type.value]
         worksheet = workbook.create_sheet(sheet_name)
-        for row in dataframe_to_rows(document.data, index=False, header=True):
+        visible_export = build_visible_export(
+            document=document,
+            company=company,
+            period=period,
+            sheet_name=sheet_name,
+            seed=(0 if seed is None else seed) + index,
+            severity=resolved.severity,
+        )
+        for row in dataframe_to_rows(visible_export.data, index=False, header=True):
             worksheet.append(row)
         logger.start_sheet(document, worksheet)
+        logger.record_visible_export(worksheet.title, visible_export)
 
         layout_config = resolved.layout_config(
             company=company,
             period=period,
-            title=f"{sheet_name} - PBC support",
+            title=(
+                f"{sheet_name} - PBC support FY{period.financial_year} "
+                f"{company.currency} ({period.start_date.isoformat()} to "
+                f"{period.end_date.isoformat()})"
+            ),
             seed=seed,
             sheet_index=index,
             hidden_recon_allowed=document.document_type.value != "pbc_request_list",

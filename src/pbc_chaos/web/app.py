@@ -79,7 +79,7 @@ class RunStore:
                     run["artifacts"].extend(
                         artifact for artifact in result["artifacts"] if artifact["path"] not in known
                     )
-                run["status"] = "succeeded" if not result.get("passed") is False else "failed"
+                run["status"] = "succeeded" if result.get("passed") is not False else "failed"
         except Exception as exc:  # pragma: no cover - exercised through local UI.
             with self._lock:
                 run = self._runs[run_id]

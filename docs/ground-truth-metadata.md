@@ -43,6 +43,13 @@ Workbook-level metadata includes:
 Each document sheet includes:
 
 - clean canonical schema
+- visible export profile, department, and ERP style
+- visible table schema for canonical fields that are present as table columns
+- visible column headers written to Excel before later layout mutations
+- visible-to-canonical and canonical-to-visible column mappings
+- canonical fields intentionally omitted from the visible table
+- context field locations and values for omitted workbook-level fields
+- ambiguous visible headers and their sheet-specific canonical meaning
 - original clean row count
 - final messy row count
 - main table start/end coordinates
@@ -53,4 +60,3 @@ Each document sheet includes:
 - inserted notes
 - intentional errors
 - clean expected extraction records
-

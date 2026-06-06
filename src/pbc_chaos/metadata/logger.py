@@ -27,6 +27,17 @@ class _SheetLog:
     original_clean_row_count: int
     table_location: TableLocation | None = None
     renamed_columns_mapping: dict[str, str] = field(default_factory=dict)
+    visible_export_profile: str | None = None
+    visible_export_department: str | None = None
+    visible_export_erp_style: str | None = None
+    visible_table_schema: tuple[str, ...] = ()
+    visible_column_headers: tuple[str, ...] = ()
+    visible_columns_mapping: dict[str, str] = field(default_factory=dict)
+    canonical_to_visible_columns: dict[str, str] = field(default_factory=dict)
+    omitted_canonical_fields: tuple[str, ...] = ()
+    context_field_locations: dict[str, str] = field(default_factory=dict)
+    context_field_values: dict[str, Any] = field(default_factory=dict)
+    ambiguous_visible_headers: dict[str, str] = field(default_factory=dict)
     inserted_notes: list[dict[str, Any]] = field(default_factory=list)
     intentional_errors: list[dict[str, Any]] = field(default_factory=list)
 
@@ -94,6 +105,39 @@ class GroundTruthLogger:
     def record_renamed_columns(self, sheet_name: str, mapping: dict[str, str]) -> None:
         if mapping:
             self._sheet(sheet_name).renamed_columns_mapping.update(mapping)
+
+    def record_visible_export(self, sheet_name: str, visible_export: Any) -> None:
+        """Record workbook-facing export schema metadata for one sheet."""
+
+        sheet = self._sheet(sheet_name)
+        sheet.visible_export_profile = str(visible_export.profile_id)
+        sheet.visible_export_department = str(visible_export.department)
+        sheet.visible_export_erp_style = str(visible_export.erp_style)
+        sheet.visible_table_schema = tuple(str(field) for field in visible_export.visible_table_schema)
+        sheet.visible_column_headers = tuple(
+            str(header) for header in visible_export.visible_column_headers
+        )
+        sheet.visible_columns_mapping = {
+            str(header): str(field)
+            for header, field in visible_export.visible_to_canonical.items()
+        }
+        sheet.canonical_to_visible_columns = {
+            str(field): str(header)
+            for field, header in visible_export.canonical_to_visible.items()
+        }
+        sheet.omitted_canonical_fields = tuple(
+            str(field) for field in visible_export.omitted_fields
+        )
+        sheet.context_field_locations = {
+            str(field): str(location)
+            for field, location in visible_export.context_fields.items()
+        }
+        sheet.context_field_values = _json_safe(dict(visible_export.context_field_values))
+        sheet.ambiguous_visible_headers = {
+            str(header): str(field)
+            for header, field in visible_export.ambiguous_visible_headers.items()
+        }
+        self.record_renamed_columns(sheet_name, sheet.canonical_to_visible_columns)
 
     def record_intentional_error(
         self,
@@ -174,6 +218,17 @@ class GroundTruthLogger:
             final_messy_row_count=_non_empty_row_count(worksheet),
             table_location=table,
             renamed_columns_mapping=dict(log.renamed_columns_mapping),
+            visible_export_profile=log.visible_export_profile,
+            visible_export_department=log.visible_export_department,
+            visible_export_erp_style=log.visible_export_erp_style,
+            visible_table_schema=log.visible_table_schema,
+            visible_column_headers=log.visible_column_headers,
+            visible_columns_mapping=dict(log.visible_columns_mapping),
+            canonical_to_visible_columns=dict(log.canonical_to_visible_columns),
+            omitted_canonical_fields=log.omitted_canonical_fields,
+            context_field_locations=dict(log.context_field_locations),
+            context_field_values=dict(log.context_field_values),
+            ambiguous_visible_headers=dict(log.ambiguous_visible_headers),
             hidden_rows=tuple(
                 row_idx for row_idx, dimension in worksheet.row_dimensions.items() if dimension.hidden
             ),

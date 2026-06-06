@@ -194,7 +194,7 @@ class ChaosWorkbookConfig:
                 rng,
                 max_count=6,
             ),
-            add_title_block=_roll(p.inserted_notes, rng),
+            add_title_block=True if self.severity >= 3 else _roll(p.inserted_notes, rng),
             add_client_notes_block=_roll(p.inserted_notes, rng),
             add_footer_notes_block=_roll(p.inserted_notes, rng),
             rename_column_count=_count_from_probability(p.renamed_columns, self.severity, rng, max_count=4),

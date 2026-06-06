@@ -227,7 +227,7 @@ class UnreproducibleNightmareAgent:
                 api_key=api_key,
                 timeout=self.config.llm_timeout_seconds,
             )
-            parsed = json.loads(_response_text(response))
+            parsed, _ = json.JSONDecoder().raw_decode(_response_text(response).lstrip())
         except (OSError, HTTPError, URLError, TimeoutError, json.JSONDecodeError, KeyError) as exc:
             return [], f"LLM planner failed: {exc}"
 
