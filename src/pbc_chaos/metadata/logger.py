@@ -27,6 +27,17 @@ class _SheetLog:
     original_clean_row_count: int
     table_location: TableLocation | None = None
     renamed_columns_mapping: dict[str, str] = field(default_factory=dict)
+    report_archetype_id: str | None = None
+    report_form: str | None = None
+    report_title: str | None = None
+    report_grouping_key: str | None = None
+    report_grand_total: bool = False
+    report_subtotal_labels: tuple[str, ...] = ()
+    report_grain_schema: tuple[str, ...] = ()
+    report_bucket_label_mapping: dict[str, str] = field(default_factory=dict)
+    report_header_band: tuple[dict[str, Any], ...] = ()
+    report_software_signature: str | None = None
+    expected_report_output: tuple[dict[str, Any], ...] = ()
     visible_export_profile: str | None = None
     visible_export_department: str | None = None
     visible_export_erp_style: str | None = None
@@ -105,6 +116,34 @@ class GroundTruthLogger:
     def record_renamed_columns(self, sheet_name: str, mapping: dict[str, str]) -> None:
         if mapping:
             self._sheet(sheet_name).renamed_columns_mapping.update(mapping)
+
+    def record_report_frame(self, sheet_name: str, frame: Any) -> None:
+        """Record the report-archetype shape applied before visible aliasing."""
+
+        sheet = self._sheet(sheet_name)
+        sheet.report_archetype_id = str(frame.archetype_id)
+        sheet.report_form = str(frame.report_form)
+        sheet.report_title = str(frame.report_title)
+        sheet.report_grouping_key = (
+            str(frame.grouping_key) if frame.grouping_key is not None else None
+        )
+        sheet.report_grand_total = bool(frame.grand_total)
+        sheet.report_subtotal_labels = tuple(str(label) for label in frame.subtotal_labels)
+        sheet.report_grain_schema = tuple(str(field) for field in frame.report_grain_schema)
+        sheet.report_bucket_label_mapping = {
+            str(field): str(label) for field, label in frame.bucket_label_mapping.items()
+        }
+        sheet.report_header_band = tuple(
+            {str(key): _json_safe(value) for key, value in line.as_dict().items()}
+            for line in frame.header_band
+        )
+        sheet.report_software_signature = (
+            str(frame.software_signature) if frame.software_signature is not None else None
+        )
+        if frame.report_form != "listing":
+            sheet.expected_report_output = tuple(
+                _dataframe_records(frame.aggregated_canonical_view)
+            )
 
     def record_visible_export(self, sheet_name: str, visible_export: Any) -> None:
         """Record workbook-facing export schema metadata for one sheet."""
@@ -218,6 +257,17 @@ class GroundTruthLogger:
             final_messy_row_count=_non_empty_row_count(worksheet),
             table_location=table,
             renamed_columns_mapping=dict(log.renamed_columns_mapping),
+            report_archetype_id=log.report_archetype_id,
+            report_form=log.report_form,
+            report_title=log.report_title,
+            report_grouping_key=log.report_grouping_key,
+            report_grand_total=log.report_grand_total,
+            report_subtotal_labels=log.report_subtotal_labels,
+            report_grain_schema=log.report_grain_schema,
+            report_bucket_label_mapping=dict(log.report_bucket_label_mapping),
+            report_header_band=log.report_header_band,
+            report_software_signature=log.report_software_signature,
+            expected_report_output=log.expected_report_output,
             visible_export_profile=log.visible_export_profile,
             visible_export_department=log.visible_export_department,
             visible_export_erp_style=log.visible_export_erp_style,

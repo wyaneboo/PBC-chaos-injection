@@ -367,6 +367,16 @@ def _run_score(options: dict[str, Any], command_preview: str, emit: Emitter) -> 
     return {
         "mode": "score",
         "overall_score": report.overall_score,
+        "report_forms": [
+            {
+                "sheet": document.sheet_name,
+                "document_type": document.document_type,
+                "report_form": document.report_form or "listing",
+                "scored_grain": document.scored_grain,
+                "score": document.score,
+            }
+            for document in report.documents
+        ],
         "artifacts": artifacts,
     }
 

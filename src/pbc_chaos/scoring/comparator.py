@@ -159,11 +159,13 @@ def _score_sheet(
     config: ScoringConfig,
 ) -> DocumentScore:
     expected_type = str(sheet.get("document_type", ""))
-    expected_schema = tuple(str(field) for field in sheet.get("clean_canonical_schema", ()))
+    detail_schema = tuple(str(field) for field in sheet.get("clean_canonical_schema", ()))
+    expected_schema, expected_rows = _expected_grain(sheet, detail_schema)
+    report_form = _optional_string(sheet.get("report_form"))
+    scored_grain = "report" if report_form in {"summary_pivot", "detail_grouped", "totaled_listing"} and sheet.get("expected_report_output") else "detail"
     visible_table_schema = _visible_table_schema(sheet, expected_schema)
     visible_headers = _visible_column_headers(sheet, visible_table_schema)
     renamed_headers = _renamed_column_headers(sheet, visible_table_schema, visible_headers)
-    expected_rows = tuple(_dict_rows(sheet.get("expected_extraction_output", ())))
     issues: list[str] = []
 
     if extraction is None:
@@ -178,6 +180,8 @@ def _score_sheet(
                 expected_schema=visible_table_schema,
             ),
             issues=tuple(issues),
+            report_form=report_form,
+            scored_grain=scored_grain,
         )
 
     actual_headers = _document_headers(extraction)
@@ -241,6 +245,8 @@ def _score_sheet(
         matched_document_type=extraction.document_type,
         metrics=metrics,
         issues=tuple(issues),
+        report_form=report_form,
+        scored_grain=scored_grain,
     )
 
 
@@ -1145,6 +1151,25 @@ def _document_headers(extraction: NormalizedExtractionDocument) -> tuple[str, ..
     for row in extraction.rows[:1]:
         headers.extend(key for key in row if key not in headers)
     return tuple(dict.fromkeys(str(header) for header in headers if str(header)))
+
+
+def _expected_grain(
+    sheet: dict[str, Any],
+    detail_schema: tuple[str, ...],
+) -> tuple[tuple[str, ...], tuple[dict[str, Any], ...]]:
+    """Return the expected schema and rows at the grain the workbook actually shows.
+
+    Report archetypes such as the AP/AR summary pivot change the grain of the
+    visible table. For those forms scoring must compare against the report-grain
+    truth rather than the canonical open-item rows.
+    """
+
+    report_form = sheet.get("report_form")
+    report_rows = tuple(_dict_rows(sheet.get("expected_report_output", ())))
+    if report_form in {"summary_pivot", "detail_grouped"} and report_rows:
+        grain = tuple(str(field) for field in sheet.get("report_grain_schema", ()))
+        return (grain or detail_schema), report_rows
+    return detail_schema, tuple(_dict_rows(sheet.get("expected_extraction_output", ())))
 
 
 def _visible_table_schema(

@@ -46,6 +46,9 @@ class LayoutChaosConfig:
     add_title_block: bool = True
     add_client_notes_block: bool = True
     add_footer_notes_block: bool = True
+    software_signature: str | None = None
+    report_currency: str | None = None
+    report_as_at: str | None = None
     rename_column_count: int = 0
     stringified_number_count: int = 0
     formula_error_count: int = 0
@@ -133,6 +136,8 @@ def apply_layout_chaos(
             financial_year=resolved.financial_year,
             rng=rng,
             merge_cells=resolved.merge_cells,
+            as_at=resolved.report_as_at,
+            currency=resolved.report_currency,
         )
         if metadata_logger is not None:
             metadata_logger.record_inserted_note(
@@ -141,6 +146,20 @@ def apply_layout_chaos(
                 cell=worksheet.cell(title_table.min_row, title_table.min_col).coordinate,
                 text=title,
             )
+        if resolved.software_signature:
+            signature_text = workbook_mutations.add_software_signature(
+                worksheet,
+                table,
+                signature=resolved.software_signature,
+                rng=rng,
+            )
+            if metadata_logger is not None:
+                metadata_logger.record_inserted_note(
+                    worksheet.title,
+                    kind="software_signature",
+                    cell=worksheet.cell(max(1, table.min_row - 1), table.min_col).coordinate,
+                    text=signature_text,
+                )
     if resolved.add_client_notes_block:
         notes_table = table
         table = workbook_mutations.add_client_notes(worksheet, table, rng=rng)
@@ -223,6 +242,7 @@ def apply_layout_chaos(
 
     formatting.apply_inconsistent_formatting(worksheet, table, rng=rng)
     table = formatting.apply_status_cells(worksheet, table, rng=rng)
+    formatting.apply_finance_value_formats(worksheet, table, rng=rng)
     stringified_cells = workbook_mutations.stringify_numeric_cells(
         worksheet,
         table,
@@ -278,6 +298,27 @@ def apply_layout_chaos(
                 kind="secondary_table",
                 cell=secondary_table["start_cell"],
                 text=secondary_table,
+            )
+
+    if resolved.software_signature:
+        bottom = workbook_mutations.find_used_range(worksheet) or table
+        footer_anchor = workbook_mutations.TableBounds(
+            table.min_row, table.min_col, bottom.max_row, table.max_col
+        )
+        workbook_mutations.add_report_footer_band(
+            worksheet,
+            footer_anchor,
+            signature=resolved.software_signature,
+            prepared_by=resolved.prepared_by,
+            reviewer_name=resolved.reviewer_name,
+            as_at=resolved.report_as_at,
+        )
+        if metadata_logger is not None:
+            metadata_logger.record_inserted_note(
+                worksheet.title,
+                kind="report_footer_band",
+                cell=worksheet.cell(bottom.max_row + 2, table.min_col).coordinate,
+                text=f"System: {resolved.software_signature}",
             )
 
     if resolved.add_old_version_tabs:

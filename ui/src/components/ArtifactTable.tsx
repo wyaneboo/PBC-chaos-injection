@@ -76,10 +76,33 @@ function ResultSummary({ result }: { result: Record<string, unknown> }) {
     );
   }
   if (result.mode === "score") {
+    const reportForms = Array.isArray(result.report_forms) ? result.report_forms : [];
     return (
       <div className="resultSummary passed">
         <h3>Score complete</h3>
         <p>Overall score: {Number(result.overall_score ?? 0).toFixed(3)}</p>
+        {reportForms.length ? (
+          <dl>
+            {reportForms.map((entry) => {
+              const item = entry as {
+                sheet?: unknown;
+                report_form?: unknown;
+                scored_grain?: unknown;
+                score?: unknown;
+              };
+              return (
+                <div key={String(item.sheet)}>
+                  <dt>{String(item.sheet)}</dt>
+                  <dd>
+                    {String(item.report_form ?? "listing")}
+                    {item.scored_grain ? ` · ${String(item.scored_grain)} grain` : ""}
+                    {item.score != null ? ` · ${Number(item.score).toFixed(3)}` : ""}
+                  </dd>
+                </div>
+              );
+            })}
+          </dl>
+        ) : null}
       </div>
     );
   }

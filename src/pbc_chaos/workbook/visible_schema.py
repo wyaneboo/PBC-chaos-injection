@@ -65,6 +65,7 @@ def build_visible_export(
     sheet_name: str,
     seed: int,
     severity: int,
+    header_overrides: Mapping[str, str] | None = None,
 ) -> VisibleExportResult:
     """Return a workbook-facing DataFrame and mapping metadata.
 
@@ -72,6 +73,11 @@ def build_visible_export(
     Severities 1-2 rename and reorder visible headers while retaining common
     metadata fields. Severities 3-5 relocate common workbook context out of most
     main tables.
+
+    ``header_overrides`` lets a caller (such as the report-archetype layer) fix
+    the visible header for specific canonical fields - for example forcing aging
+    bucket columns to a coherent finance day-band family - while preserving the
+    recorded canonical-to-visible mapping.
     """
 
     data = document.data.copy()
@@ -104,8 +110,12 @@ def build_visible_export(
     visible_to_canonical: dict[str, str] = {}
     ambiguous_headers: dict[str, str] = {}
     used_headers: set[str] = set()
+    overrides = dict(header_overrides or {})
     for field in visible_fields:
-        header = _choose_header(field, aliases.get(field), rng=rng, severity=severity)
+        if field in overrides:
+            header = overrides[field]
+        else:
+            header = _choose_header(field, aliases.get(field), rng=rng, severity=severity)
         header = _unique_header(header, used_headers)
         canonical_to_visible[field] = header
         visible_to_canonical[header] = field

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Mapping
 
@@ -30,6 +30,11 @@ from pbc_chaos.reconciliation import (
     generate_trial_balance,
 )
 from pbc_chaos.workbook import layout_engine
+from pbc_chaos.workbook.report_archetypes import (
+    SIGNATURE_MIN_SEVERITY,
+    build_report_frame,
+    choose_software_signature,
+)
 from pbc_chaos.workbook.visible_schema import build_visible_export
 
 
@@ -90,34 +95,48 @@ def generate_pbc_workbook_with_ground_truth(
 
     workbook = Workbook()
     workbook.remove(workbook.active)
+    software_signature = (
+        choose_software_signature(0 if seed is None else seed)
+        if resolved.severity >= SIGNATURE_MIN_SEVERITY
+        else None
+    )
     for index, document in enumerate(documents, start=1):
         sheet_name = SHEET_NAMES[document.document_type.value]
         worksheet = workbook.create_sheet(sheet_name)
-        visible_export = build_visible_export(
+        report_frame = build_report_frame(
             document=document,
             company=company,
             period=period,
             sheet_name=sheet_name,
             seed=(0 if seed is None else seed) + index,
             severity=resolved.severity,
+            software_signature=software_signature,
+        )
+        report_document = replace(document, data=report_frame.table)
+        visible_export = build_visible_export(
+            document=report_document,
+            company=company,
+            period=period,
+            sheet_name=sheet_name,
+            seed=(0 if seed is None else seed) + index,
+            severity=resolved.severity,
+            header_overrides=report_frame.bucket_label_mapping,
         )
         for row in dataframe_to_rows(visible_export.data, index=False, header=True):
             worksheet.append(row)
         logger.start_sheet(document, worksheet)
+        logger.record_report_frame(worksheet.title, report_frame)
         logger.record_visible_export(worksheet.title, visible_export)
 
         layout_config = resolved.layout_config(
             company=company,
             period=period,
-            title=(
-                f"{sheet_name} - PBC support FY{period.financial_year} "
-                f"{company.currency} ({period.start_date.isoformat()} to "
-                f"{period.end_date.isoformat()})"
-            ),
+            title=report_frame.report_title,
             seed=seed,
             sheet_index=index,
             hidden_recon_allowed=document.document_type.value != "pbc_request_list",
             document_type=document.document_type,
+            software_signature=software_signature,
         )
         layout_engine.apply_layout_chaos(
             workbook=workbook,

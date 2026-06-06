@@ -30,6 +30,17 @@ class SheetGroundTruth:
     final_messy_row_count: int
     table_location: TableLocation
     renamed_columns_mapping: dict[str, str] = field(default_factory=dict)
+    report_archetype_id: str | None = None
+    report_form: str | None = None
+    report_title: str | None = None
+    report_grouping_key: str | None = None
+    report_grand_total: bool = False
+    report_subtotal_labels: tuple[str, ...] = ()
+    report_grain_schema: tuple[str, ...] = ()
+    report_bucket_label_mapping: dict[str, str] = field(default_factory=dict)
+    report_header_band: tuple[dict[str, Any], ...] = ()
+    report_software_signature: str | None = None
+    expected_report_output: tuple[dict[str, Any], ...] = ()
     visible_export_profile: str | None = None
     visible_export_department: str | None = None
     visible_export_erp_style: str | None = None

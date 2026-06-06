@@ -153,8 +153,12 @@ class ChaosWorkbookConfig:
         sheet_index: int,
         hidden_recon_allowed: bool,
         document_type: DocumentType | None = None,
+        software_signature: str | None = None,
     ) -> LayoutChaosConfig:
         """Convert probability controls into concrete layout mutations for one sheet."""
+
+        report_as_at = period.end_date.strftime("%d/%m/%Y")
+        report_currency = company.currency
 
         if self.severity == 0:
             return LayoutChaosConfig(
@@ -162,6 +166,8 @@ class ChaosWorkbookConfig:
                 client_name=company.company_name,
                 financial_year=period.financial_year,
                 title=title,
+                report_currency=report_currency,
+                report_as_at=report_as_at,
             )
 
         rng = Random(_sheet_seed(seed, sheet_index))
@@ -174,6 +180,9 @@ class ChaosWorkbookConfig:
             reviewer_name="Audit Senior",
             financial_year=period.financial_year,
             title=title,
+            software_signature=software_signature,
+            report_currency=report_currency,
+            report_as_at=report_as_at,
             max_top_shift=max(1, self.severity + 1),
             max_left_shift=max(0, min(4, self.severity)),
             blank_row_count=_count_from_probability(p.inserted_notes, self.severity, rng, max_count=3),

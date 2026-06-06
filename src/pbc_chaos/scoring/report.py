@@ -31,6 +31,8 @@ class DocumentScore:
     matched_document_type: str | None
     metrics: dict[str, MetricResult]
     issues: tuple[str, ...] = ()
+    report_form: str | None = None
+    scored_grain: str | None = None
 
     @property
     def score(self) -> float:
@@ -42,6 +44,8 @@ class DocumentScore:
         return {
             "sheet_name": self.sheet_name,
             "document_type": self.document_type,
+            "report_form": self.report_form,
+            "scored_grain": self.scored_grain,
             "matched_sheet_name": self.matched_sheet_name,
             "matched_document_type": self.matched_document_type,
             "score": self.score,
@@ -111,6 +115,8 @@ class ScoreReport:
                 [
                     f"### {document.sheet_name} ({document.document_type})",
                     "",
+                    f"- Report form: {document.report_form or 'listing'}"
+                    + (f" (scored at {document.scored_grain} grain)" if document.scored_grain else ""),
                     f"- Matched sheet: {document.matched_sheet_name or 'none'}",
                     f"- Matched document type: {document.matched_document_type or 'none'}",
                     f"- Document score: {_format_score(document.score)}",
